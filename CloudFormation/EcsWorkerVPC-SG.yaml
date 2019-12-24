@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy EcsWorkerVPC Security Groups
+#----------------------------------------------
+Resources:
+  #------------------ BastionSG
+  BastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-BastionSG
+      GroupDescription: allow ssh login to bastion Instances 
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-BastionSG
+  BastionSGAllowIngressSsh:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref BastionSG
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+  #------------------ WorkerSG
+  WorkerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-WorkerSG
+      GroupDescription: for ecs worker nodes 
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-WorkerSG
+  WorkerSGAllowIngressSsh:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WorkerSG
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !GetAtt BastionSG.GroupId
+  #------------------ VPC Endpoint(ecs)
+  VpceEcsSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-VPCE-ECS-SG
+      GroupDescription: for ECS VPC endpoint
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-VPCE-ECS-SG
+  VpceEcsSGAllowIngressWorker:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VpceEcsSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
+  #------------------ VPC Endpoint(ecr)
+  VpceEcrSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-VPCE-ECR-SG
+      GroupDescription: for ECR VPC endpoint
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-VPCE-ECR-SG
+  #VpceEcrSGAllowIngressWorker:
+  #  Type: AWS::EC2::SecurityGroupIngress
+  #  Properties:
+  #    GroupId: !Ref VpceEcrSG
+  #    IpProtocol: tcp
+  #    FromPort: 443
+  #    ToPort: 443
+  #    SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
+  #VpceEcrSGAllowIngressTaskSG:
+  #  Type: AWS::EC2::SecurityGroupIngress
+  #  Properties:
+  #    GroupId: !Ref VpceEcrSG
+  #    IpProtocol: tcp
+  #    FromPort: 443
+  #    ToPort: 443
+  #    SourceSecurityGroupId: !GetAtt TaskSG.GroupId
+  #------------------ VPC Endpoint(logs)
+  VpceLogsSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-VPCE-Logs-SG
+      GroupDescription: for Logs VPC endpoint
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-VPCE-Logs-SG
+  #VpceLogsSGAllowIngressWorker:
+  #  Type: AWS::EC2::SecurityGroupIngress
+  #  Properties:
+  #    GroupId: !Ref VpceLogsSG
+  #    IpProtocol: tcp
+  #    FromPort: 443
+  #    ToPort: 443
+  #    SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
+  #VpceLogsSGAllowIngressTask:
+  #  Type: AWS::EC2::SecurityGroupIngress
+  #  Properties:
+  #    GroupId: !Ref VpceLogsSG
+  #    IpProtocol: tcp
+  #    FromPort: 443
+  #    ToPort: 443
+  #    SourceSecurityGroupId: !GetAtt TaskSG.GroupId
+  #------------------ AlbSG
+  AlbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-AlbSG
+      GroupDescription: allow http access from any
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-AlbSG
+  AlbSGAllowIngresshttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlbSG
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+  #------------------ TaskSG
+  TaskSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsWorkerVPC-TaskSG
+      GroupDescription: allow http access from any
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: EcsWorkerVPC-TaskSG
+  TaskSGAllowIngresshttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TaskSG
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt AlbSG.GroupId
+Outputs:
+  #------------------ For Infra
+  BastionSGId:
+    Description: EcsWorkerVPC-BastionSG Id
+    Value: !Ref BastionSG
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionSGId
+  WorkerSGId:
+    Description: EcsWorkerVPC-WorkerSG Id
+    Value: !Ref WorkerSG
+    Export:
+      Name: !Sub ${AWS::StackName}-WorkerSGId
+  VpceEcsSGId:
+    Description: EcsWorkerVPC-VpceEcsSG Id
+    Value: !Ref VpceEcsSG
+    Export:
+      Name: !Sub ${AWS::StackName}-VpceEcsSGId
+  VpceEcrSGId:
+    Description: EcsWorkerVPC-VpceEcrSG Id
+    Value: !Ref VpceEcrSG
+    Export:
+      Name: !Sub ${AWS::StackName}-VpceEcrSGId
+  VpceLogsSGId:
+    Description: EcsWorkerVPC-VpceLogsSG Id
+    Value: !Ref VpceLogsSG
+    Export:
+      Name: !Sub ${AWS::StackName}-VpceLogsSGId
+  #------------------ For Containers
+  AlbSGId:
+    Description: EcsWorkerVPC-AlbSG Id
+    Value: !Ref AlbSG
+    Export:
+      Name: !Sub ${AWS::StackName}-AlbSGId
+  TaskSGId:
+    Description: EcsWorkerVPC-TaskSG Id
+    Value: !Ref TaskSG
+    Export:
+      Name: !Sub ${AWS::StackName}-TaskSGId

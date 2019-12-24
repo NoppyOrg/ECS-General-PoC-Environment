@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy VPCEndpoints
+#----------------------------------------------
+#----------------------------------------------
+Resources:
+  EcsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue:  EcsWorker-VPC-SecurityGroup-VpceEcsSGId
+  EcrApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue: EcsWorker-VPC-SecurityGroup-VpceEcrSGId
+  EcrDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue: EcsWorker-VPC-SecurityGroup-VpceEcrSGId
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue: EcsWorker-VPC-SecurityGroup-VpceLogsSGId
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      RouteTableIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1RouteTableId
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2RouteTableId
+Outputs:
+  EcsEndpointId:
+    Description: VPCEndpoint Id for ECS
+    Value: !Ref EcsEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-EcsEndpointId
+  EcrApiEndpointId:
+    Description: VPCEndpoint Id for ECR(API)
+    Value: !Ref EcrApiEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-EcrApiEndpointId
+  EcrDkrEndpointId:
+    Description: VPCEndpoint Id for ECR(docker)
+    Value: !Ref EcrDkrEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-EcrDkrEndpointId
+  LogsEndpointId:
+    Description: VPCEndpoint Id for Logs
+    Value: !Ref LogsEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-LogsEndpointId
+  S3EndpointId:
+    Description: VPCEndpoint Id for S3
+    Value: !Ref S3Endpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-S3EndpointId
+
+      

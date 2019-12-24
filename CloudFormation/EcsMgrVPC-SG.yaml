@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy MgrVPC Security Groups
+#----------------------------------------------
+Resources:
+  #------------------ Security Groups
+  MgrSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ManagementVPC-MgrSG
+      GroupDescription: allow ssh login to Manager Instances 
+      VpcId: 
+        Fn::ImportValue: EcsMgr-VPC-VpcId
+      Tags:
+        - Key: Name
+          Value: ManagementVPC-MgrSG
+  MgrSGIngressSshMgrSG:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref MgrSG
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+Outputs:
+  #------------------ Security Group
+  MgrSGId:
+    Description: ManagementVPC-MgrSG Id
+    Value: !Ref MgrSG
+    Export:
+      Name: !Sub ${AWS::StackName}-MgrSGId
