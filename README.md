@@ -16,7 +16,7 @@ ECSを、VPC Endpointを利用したインターネット接続のない環境�
 これ以降のAWS-CLIで共通で利用するパラメータを環境変数で設定しておきます。
 ```shell
 export PROFILE=<設定したプロファイル名称を指定。デフォルトの場合はdefaultを設定>
-export REGION=ap-northeast-1
+export REGION=$(aws --profile ${PROFILE} configure get region)
 ```
 
 ## (2)VPCの作成(CloudFormation利用)
