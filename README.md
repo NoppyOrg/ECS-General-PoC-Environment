@@ -120,7 +120,6 @@ aws --profile ${PROFILE} cloudformation update-stack \
     --stack-name EcsWorker-VPC-SecurityGroup \
     --template-body "file://./CloudFormation/EcsWorkerVPC-SG.yaml" ;
 ```
-
 ## (4) VPC Endpoint設定
 ECSWorker-VPCに、ECS、ECR(API, Docker)、Logs、S3のVPC Endpointを作成します。Endpoint policyはここでは設定せず、リソース作成後にCLIで設定します。
 ```shell
@@ -368,7 +367,7 @@ aws --profile ${PROFILE} \
 ### (5)-(d) タスク実行 IAM ロール
 Amazon ECS コンテナエージェントと Fargate タスクの Fargate エージェントが利用するIAMロール
 ```shell
-#ecsServiceRoleロールの作成
+#実行ロールの作成
 POLICY='{
   "Version": "2008-10-17",
   "Statement": [
@@ -443,9 +442,149 @@ PolicyDocument='{
 aws --profile ${PROFILE} \
     iam put-role-policy \
         --role-name "AmazonEC2ContainerServiceEventsRole" \
-        --policy-name AmazonECSEventsTaskExecutionRole \
-        --policy-document "${POLICY}"
+        --policy-name "AmazonECSEventsTaskExecutionRole" \
+        --policy-document "${PolicyDocument}" ;
 ```
+
+## (6) ECS管理用/Bastionサーバ設置
+### (6)-(a) 共通設定
+```shell
+KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。  
+
+#最新のAmazon Linux2のAMI IDを取得します。
+AL2_AMIID=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-images \
+        --owners amazon \
+        --filters 'Name=name,Values=amzn2-ami-hvm-2.0.????????.?-x86_64-gp2' \
+                  'Name=state,Values=available' \
+        --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' ) ;
+
+echo -e "KEYNAME=${KEYNAME}\nAL2_AMIID=${AL2_AMIID}"
+```
+### (6)-(b) ECS管理用インスタンス
+#### (i) CloudFormationデータ取得
+```shell
+Subnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsMgr-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`Subnet1Id`].[OutputValue]')
+
+SG_ID=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsMgr-VPC-SecurityGroup \
+        --query 'Stacks[].Outputs[?OutputKey==`MgrSGId`].[OutputValue]')
+
+echo -e "Subnet1Id= $Subnet1Id\nSG_ID    = ${SG_ID}"
+```
+#### (ii) ECS管理用インスタンス作成
+```shell
+#インスタンスタイプ設定
+INSTANCE_TYPE="t2.micro"
+
+#タグ設定
+TAGJSON='
+[
+    {
+        "ResourceType": "instance",
+        "Tags": [
+            {
+                "Key": "Name",
+                "Value": "ECS-Manager"
+            }
+        ]
+    }
+]'
+
+#ユーザデータ設定
+USER_DATA='
+#!/bin/bash -xe
+                
+yum -y update
+yum -y install bind bind-utils
+hostnamectl set-hostname ECS-Manager
+'
+# サーバの起動
+aws --profile ${PROFILE} \
+    ec2 run-instances \
+        --image-id ${AL2_AMIID} \
+        --instance-type ${INSTANCE_TYPE} \
+        --key-name ${KEYNAME} \
+        --subnet-id ${Subnet1Id} \
+        --security-group-ids ${SG_ID} \
+        --associate-public-ip-address \
+        --tag-specifications "${TAGJSON}" \
+        --user-data "${USER_DATA}" ;
+```
+
+
+### (6)-(c) ECSWorker Bastionインスタンス
+#### (i) CloudFormationデータ取得
+```shell
+PublicSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet1Id`].[OutputValue]')
+
+SG_ID=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC-SecurityGroup \
+        --query 'Stacks[].Outputs[?OutputKey==`BastionSGId`].[OutputValue]')
+
+echo -e "Subnet1Id= $Subnet1Id\nSG_ID    = ${SG_ID}"
+```
+#### (ii) ECS管理用インスタンス作成
+```shell
+#インスタンスタイプ設定
+INSTANCE_TYPE="t2.micro"
+
+#タグ設定
+TAGJSON='
+[
+    {
+        "ResourceType": "instance",
+        "Tags": [
+            {
+                "Key": "Name",
+                "Value": "ECSWorker-Bastionr"
+            }
+        ]
+    }
+]'
+
+#ユーザデータ設定
+USER_DATA='
+#!/bin/bash -xe
+                
+yum -y update
+yum -y install bind bind-utils
+hostnamectl set-hostname ECSWorker-Bastionr
+'
+# サーバの起動
+aws --profile ${PROFILE} \
+    ec2 run-instances \
+        --image-id ${AL2_AMIID} \
+        --instance-type ${INSTANCE_TYPE} \
+        --key-name ${KEYNAME} \
+        --subnet-id ${PublicSubnet1Id} \
+        --security-group-ids ${SG_ID} \
+        --associate-public-ip-address \
+        --tag-specifications "${TAGJSON}" \
+        --user-data "${USER_DATA}" ;
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -671,7 +810,7 @@ aws --profile ${PROFILE} \
         --instance-profile-name "Ec2-StorageGW-AdminRole-Profile" \
         --role-name "Ec2-StorageGW-AdminRole" ;
 ```
-## (5) Windows/Linuxクライアント、Linux-Manager作成
+## (5) Windows/Linuxクライアントf、Linux-Manager作成
 <img src="./Documents/Step5.png" whdth=500>
 
 ### (5)-(a) セキュリティーグループ作成(Bastion)
