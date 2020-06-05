@@ -70,14 +70,14 @@ Resources:
       Tags:
         - Key: Name
           Value: EcsWorkerVPC-VPCE-ECR-SG
-  #VpceEcrSGAllowIngressWorker:
-  #  Type: AWS::EC2::SecurityGroupIngress
-  #  Properties:
-  #    GroupId: !Ref VpceEcrSG
-  #    IpProtocol: tcp
-  #    FromPort: 443
-  #    ToPort: 443
-  #    SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
+  VpceEcrSGAllowIngressWorker:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VpceEcrSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
   #VpceEcrSGAllowIngressTaskSG:
   #  Type: AWS::EC2::SecurityGroupIngress
   #  Properties:
@@ -97,14 +97,14 @@ Resources:
       Tags:
         - Key: Name
           Value: EcsWorkerVPC-VPCE-Logs-SG
-  #VpceLogsSGAllowIngressWorker:
-  #  Type: AWS::EC2::SecurityGroupIngress
-  #  Properties:
-  #    GroupId: !Ref VpceLogsSG
-  #    IpProtocol: tcp
-  #    FromPort: 443
-  #    ToPort: 443
-  #    SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
+  VpceLogsSGAllowIngressWorker:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VpceLogsSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !GetAtt WorkerSG.GroupId
   #VpceLogsSGAllowIngressTask:
   #  Type: AWS::EC2::SecurityGroupIngress
   #  Properties:
