@@ -12,11 +12,19 @@ ECSを、VPC Endpointを利用したインターネット接続のない環境�
 * aws-cliのセットアップ
 * AdministratorAccessポリシーが付与され実行可能な、aws-cliのProfileの設定
 
-### (1)-(b) CLI実行用の事前準備
+### (1)-(b) gitのclone
+```shell
+git clone https://github.com/Noppy/ECS-Security-PoC.git
+cd ECS-Security-PoC
+```
+
+### (1)-(c) CLI実行用の事前準備
 これ以降のAWS-CLIで共通で利用するパラメータを環境変数で設定しておきます。
 ```shell
 export PROFILE=<設定したプロファイル名称を指定。デフォルトの場合はdefaultを設定>
 export REGION=$(aws --profile ${PROFILE} configure get region)
+
+echo "REGION = ${REGION}"
 ```
 
 ## (2)VPCの作成(CloudFormation利用)
