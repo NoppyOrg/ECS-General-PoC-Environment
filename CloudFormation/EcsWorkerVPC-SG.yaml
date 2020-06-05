@@ -86,6 +86,14 @@ Resources:
   #    FromPort: 443
   #    ToPort: 443
   #    SourceSecurityGroupId: !GetAtt TaskSG.GroupId
+  VpceEcrSGAllowIBastion:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VpceEcrSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !GetAtt BastionSG.GroupId
   #------------------ VPC Endpoint(logs)
   VpceLogsSG:
     Type: AWS::EC2::SecurityGroup
