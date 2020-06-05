@@ -136,11 +136,11 @@ aws --profile ${PROFILE} cloudformation create-stack \
 <tr><td colspan=2>Admin User</td><td>EC2-EcsManagerRole</td><td>ec2</td><td><lu><li>ecs read/write</li><li>ec2(vpc)read</li><li>ec2(ec2)read/write</li><li>iam read</li></lu><li>ECS FullAccess</li><li>Describe other resource</li><li>IAM PassRole</li></td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html">ECS Developer Guide</a></td></tr>
 <tr><td rowspan=5>ECS</td><td>Service Linked</td><td>AWSServiceRoleForECS
 </td><td>ecs<br>(Service Linked)</td><td>(AWS managed)<br>AmazonECSServiceRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/using-service-linked-roles.html">Service-Linked Role for Amazon ECS</a></td></tr>
-<tr><td>[ELB]<br>ServiceRole for ECS</td><td>ecsServiceRole</td><td>ecs</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/userguide/check-service-role.html">Creating the Service Role for Your Account</a></td></tr>
+<tr><td>[ELB]<br>ServiceRole for ECS</td><td>ecsServiceRole</td><td>-</td><td>-</td><td>Service-Linkedに統合されたため不要</td></tr>
+<tr><td>Service AutoScaling</td><td>ecsAutoscaleRole</td><td>-</td><td>-</td><td>Service-Linkedに統合されたため不要</td></tr>
 <tr><td>Worker(EC2)</td><td>AmazonEC2ContainerServiceforEC2Role</td><td>ec2</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">Amazon ECS Container Instance IAM Role</a></td></tr>
-<tr><td>Service AutoScaling</td><td>ecsAutoscaleRole</td><td>application-autoscaling</td><td>(AWS managed)<br>AmazonEC2ContainerServiceAutoscaleRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-legacy-iam-roles.html#autoscale_IAM_role">ECS Developer Guide</a></td></tr>
-<tr><td>Task</td><td>ecsTaskExecutionRole</td><td>ecs-tasks</td><td>(AWS managed)<br>AmazonECSTaskExecutionRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html">ECS Developer Guide</a></td></tr>
-<tr><td colspan=2>CloudWatch Events</td><td>AmazonEC2ContainerServiceEventsRole</td><td>events</td><td>(AWS managed)<br>AmazonEC2ContainerServiceEventsRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/CWE_IAM_role.html">ECS Developer Guide</a></td></tr>
+<tr><td>Task</td><td>ecsTaskExecutionRole</td><td>ecs-tasks</td><td>(AWS managed)<br>AmazonECSTaskExecutionRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html">Amazon ECS Task Execution IAM Role</a></td></tr>
+<tr><td colspan=2>CloudWatch Events</td><td>AmazonEC2ContainerServiceEventsRole</td><td>events</td><td>(AWS managed)<br>AmazonEC2ContainerServiceEventsRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/CWE_IAM_role.html">ECS CloudWatch Events IAM Role</a></td></tr>
 </table>
 
 
@@ -335,14 +335,9 @@ aws --profile ${PROFILE} \
         --aws-service-name ecs.amazonaws.com
 ```
 
-### (5)-(c) ServiceRole for ECS(ecsServiceRole)
-ECSがタスクの作成および停止時にロードバランサーでコンテナインスタンスを登録および登録解除するために利用するIAMロールです。ほとんどの場合、Amazon ECS サービスロールは Amazon ECS コンソールの最初の実行時に自動的に作成されます。[詳細はこちら参照](https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/check-service-role.html)
+### (5)-(c) Worker(EC2)用インスタンスロール
+ECSのワーカーに設定するIAMロール(インスタンスロール)です。
 ```shell
-#スロールの有無チェック
-#このコマンドでロールが表示される場合は作成済みなのでスキップする
-aws --profile ${PROFILE} \
-    iam get-role --role-name ecsServiceRole
-
 #ecsServiceRoleロールの作成
 POLICY='{
   "Version": "2008-10-17",
@@ -351,7 +346,7 @@ POLICY='{
       "Sid": "",
       "Effect": "Allow",
       "Principal": {
-        "Service": "ecs.amazonaws.com"
+        "Service": "ec2.amazonaws.com"
       },
       "Action": "sts:AssumeRole"
     }
@@ -359,17 +354,98 @@ POLICY='{
 }'
 aws --profile ${PROFILE} \
     iam create-role \
-        --role-name "ecsServiceRole" \
+        --role-name "AmazonEC2ContainerServiceforEC2Role" \
         --assume-role-policy-document "${POLICY}" \
         --max-session-duration 43200
 
 # カスタマー管理ポリシーのアタッチ
 aws --profile ${PROFILE} \
     iam attach-role-policy \
-        --role-name "EC2-EcsManagerRole" \
+        --role-name "AmazonEC2ContainerServiceforEC2Role" \
         --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
 ```
 
+### (5)-(d) タスク実行 IAM ロール
+Amazon ECS コンテナエージェントと Fargate タスクの Fargate エージェントが利用するIAMロール
+```shell
+#ecsServiceRoleロールの作成
+POLICY='{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "ecsTaskExecutionRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
+
+# カスタマー管理ポリシーのアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "ecsTaskExecutionRole" \
+        --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+```
+
+### (5)-(e) CloudWatch イベント IAM ロール
+Amazon ECS のスケジュールされたタスクを CloudWatch イベント のルールとターゲットで使用するには、Amazon ECS タスクを実行するためのアクセス許可が CloudWatch イベント サービスに必要。
+#### (i) IAMロールの作成
+```shell
+#AmazonEC2ContainerServiceEventsRoleの作成
+POLICY='{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "events.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "AmazonEC2ContainerServiceEventsRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
+
+# カスタマー管理ポリシーのアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "AmazonEC2ContainerServiceEventsRole" \
+        --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceEventsRole
+```
+#### (ii) タスク実行ロールのアクセス許可を CloudWatch イベント IAM ロールに追加
+```shell
+
+PolicyDocument='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::'"${ACCOUNT_ID}"':role/ecsTaskExecutionRole*"
+      ]
+    }
+}'
+
+aws --profile ${PROFILE} \
+    iam put-role-policy \
+        --role-name "AmazonEC2ContainerServiceEventsRole" \
+        --policy-name AmazonECSEventsTaskExecutionRole \
+        --policy-document "${POLICY}"
+```
 
 
 
