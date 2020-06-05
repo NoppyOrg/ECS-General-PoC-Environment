@@ -134,8 +134,9 @@ aws --profile ${PROFILE} cloudformation create-stack \
 <table>
 <tr><th colspan=2>Class</th><th>IAM Role</th><th>principal</th><th>Policies summary</th><th>Remark</th></tr>
 <tr><td colspan=2>Admin User</td><td>EC2-EcsManagerRole</td><td>ec2</td><td><lu><li>ecs read/write</li><li>ec2(vpc)read</li><li>ec2(ec2)read/write</li><li>iam read</li></lu><li>ECS FullAccess</li><li>Describe other resource</li><li>IAM PassRole</li></td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html">ECS Developer Guide</a></td></tr>
-<tr><td rowspan=4>ECS</td><td>Service Linked</td><td>AWSServiceRoleForECS
+<tr><td rowspan=5>ECS</td><td>Service Linked</td><td>AWSServiceRoleForECS
 </td><td>ecs<br>(Service Linked)</td><td>(AWS managed)<br>AmazonECSServiceRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/using-service-linked-roles.html">ECS Developer Guide</a></td></tr>
+<tr><td>ServiceRole for ECS</td><td>ecsServiceRole</td><td>ecs</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">ECS Developer Guide</a></td></tr>
 <tr><td>Worker(EC2)</td><td>AmazonEC2ContainerServiceforEC2Role</td><td>ec2</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">ECS Developer Guide</a></td></tr>
 <tr><td>Service AutoScaling</td><td>ecsAutoscaleRole</td><td>application-autoscaling</td><td>(AWS managed)<br>AmazonEC2ContainerServiceAutoscaleRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-legacy-iam-roles.html#autoscale_IAM_role">ECS Developer Guide</a></td></tr>
 <tr><td>Task</td><td>ecsTaskExecutionRole</td><td>ecs-tasks</td><td>(AWS managed)<br>AmazonECSTaskExecutionRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html">ECS Developer Guide</a></td></tr>
@@ -145,7 +146,6 @@ aws --profile ${PROFILE} cloudformation create-stack \
 
 ### (5)-(a) ECS管理者用IAMロール
 管理用のLinux-EC2インスタンスに付与する、インスタンスロールを作成します。
-
 ```shell
 #事前設定
 ACCOUNT_ID=$(aws --profile ${PROFILE} --output text \
@@ -321,10 +321,54 @@ aws --profile ${PROFILE} \
 
 ```
 
-### (5)-(b) ECS管理者用IAMロール
+### (5)-(b) ECS Service Linkd Role
+ECSのサービスリンクを作成します。
+```shell
+#サービスロールの有無チェック
+#このコマンドでロールが表示される場合は作成済みなのでスキップする
+aws --profile ${PROFILE} \
+    iam get-role --role-name AWSServiceRoleForECS
 
+#ECSサービスロールの作成
+aws --profile ${PROFILE} \
+    iam create-service-linked-role \
+        --aws-service-name ecs.amazonaws.com
+```
 
+### (5)-(c) ServiceRole for ECS(ecsServiceRole)
+ECSがタスクの作成および停止時にロードバランサーでコンテナインスタンスを登録および登録解除するために利用するIAMロールです。ほとんどの場合、Amazon ECS サービスロールは Amazon ECS コンソールの最初の実行時に自動的に作成されます。[詳細はこちら参照](https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/check-service-role.html)
+```shell
+#スロールの有無チェック
+#このコマンドでロールが表示される場合は作成済みなのでスキップする
+aws --profile ${PROFILE} \
+    iam get-role --role-name ecsServiceRole
 
+#ecsServiceRoleロールの作成
+POLICY='{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ecs.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "ecsServiceRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
+
+# カスタマー管理ポリシーのアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "EC2-EcsManagerRole" \
+        --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+```
 
 
 
