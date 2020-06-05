@@ -133,7 +133,7 @@ aws --profile ${PROFILE} cloudformation create-stack \
 ここでは、合計5つのIAMロールを作成します。
 <table>
 <tr><th colspan=2>Class</th><th>IAM Role</th><th>principal</th><th>Policies summary</th><th>Remark</th></tr>
-<tr><td colspan=2>Admin User</td><td>EC2-EcsManagerRole</td><td>ec2</td><td><lu><li>ecs read/write</li><li>ec2(vpc)read</li><li>ec2(ec2)read/write</li><li>iam read</li></lu></td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html">ECS Developer Guide</a></td></tr>
+<tr><td colspan=2>Admin User</td><td>EC2-EcsManagerRole</td><td>ec2</td><td><lu><li>ecs read/write</li><li>ec2(vpc)read</li><li>ec2(ec2)read/write</li><li>iam read</li></lu><li>ECS FullAccess</li><li>Describe other resource</li><li>IAM PassRole</li></td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html">ECS Developer Guide</a></td></tr>
 <tr><td rowspan=4>ECS</td><td>Service Linked</td><td>AWSServiceRoleForECS
 </td><td>ecs<br>(Service Linked)</td><td>(AWS managed)<br>AmazonECSServiceRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/using-service-linked-roles.html">ECS Developer Guide</a></td></tr>
 <tr><td>Worker(EC2)</td><td>AmazonEC2ContainerServiceforEC2Role</td><td>ec2</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">ECS Developer Guide</a></td></tr>
