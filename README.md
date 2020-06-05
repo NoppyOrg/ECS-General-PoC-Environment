@@ -427,7 +427,6 @@ aws --profile ${PROFILE} \
 ```
 #### (ii) タスク実行ロールのアクセス許可を CloudWatch イベント IAM ロールに追加
 ```shell
-
 PolicyDocument='{
   "Version": "2012-10-17",
   "Statement": [
@@ -438,6 +437,7 @@ PolicyDocument='{
         "arn:aws:iam::'"${ACCOUNT_ID}"':role/ecsTaskExecutionRole*"
       ]
     }
+  ]
 }'
 
 aws --profile ${PROFILE} \
