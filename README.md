@@ -246,6 +246,16 @@ CustomerPolicyDocument='{
       ]
     },
     {
+      "Sid": "ForSettingECSClusterTaskDefService",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
       "Sid": "DescribeOtherServiceResources",
       "Effect": "Allow",
       "Action": [
@@ -1191,11 +1201,19 @@ REPO_URL=$( aws --output text \
         --repository-names "${ECR_REPOSITORY_NAME}" \
     --query 'repositories[].repositoryUri' ) ;
 DOCKER_IMAGE_URL="${REPO_URL}:latest"
+LOG_GROUP_NAME="/ecs/${TASK_FAMILY}"
 
-echo -e "REGION           = ${REGION}\nEXEC_ROLE_ARN    = ${EXEC_ROLE_ARN}\nDOCKER_IMAGE_URL = ${DOCKER_IMAGE_URL}"
+echo -e "REGION           = ${REGION}\nEXEC_ROLE_ARN    = ${EXEC_ROLE_ARN}\nDOCKER_IMAGE_URL = ${DOCKER_IMAGE_URL}\nLOG_GROUP_NAME   = ${LOG_GROUP_NAME}"
          
+``` 
+### (13)-(b) LogGroup作成
+タスク定義で指定しているLogsのロググループを作成する。(タスク実行ロールにはCreateLogsGroupの権限がないため)
+```shell
+aws --profile ${PROFILE} \
+    logs create-log-group \
+        --log-group-name ${LOG_GROUP_NAME};
 ```
-### (13)-(b) ECSタスク定義作成
+### (13)-(c) ECSタスク定義作成
 ```shell
 #タスク定義作成用のコンフィグ作成
 TASK_DEF_JSON='{
@@ -1236,7 +1254,7 @@ TASK_DEF_JSON='{
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/'"${TASK_FAMILY}"'",
+                    "awslogs-group": "'"${LOG_GROUP_NAME}"'",
                     "awslogs-region": "'"${REGION}"'",
                     "awslogs-stream-prefix": "container-httpd"
                 }
