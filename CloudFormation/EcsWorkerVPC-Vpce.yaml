@@ -16,6 +16,32 @@ Resources:
         - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
       SecurityGroupIds: 
         - Fn::ImportValue:  EcsWorker-VPC-SecurityGroup-VpceEcsSGId
+  EcsTelemetryEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-telemetry
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue:  EcsWorker-VPC-SecurityGroup-VpceEcsSGId
+  EcsAgentEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: 
+        Fn::ImportValue: EcsWorker-VPC-VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-agent
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: yes
+      SubnetIds:
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet1Id
+        - Fn::ImportValue: EcsWorker-VPC-PrivateSubnet2Id
+      SecurityGroupIds: 
+        - Fn::ImportValue:  EcsWorker-VPC-SecurityGroup-VpceEcsSGId
   EcrApiEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:

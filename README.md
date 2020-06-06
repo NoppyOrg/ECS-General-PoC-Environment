@@ -1180,6 +1180,7 @@ EXEC_ROLE_NAME="ecsTaskExecutionRole"
 ECR_REPOSITORY_NAME="simple-httpserver"
 
 #上記パラメータから必要な情報を設定
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/.$//')
 EXEC_ROLE_ARN=$(aws --profile ${PROFILE} --output text \
     iam get-role \
         --role-name "${EXEC_ROLE_NAME}" \
@@ -1191,13 +1192,13 @@ REPO_URL=$( aws --output text \
     --query 'repositories[].repositoryUri' ) ;
 DOCKER_IMAGE_URL="${REPO_URL}:latest"
 
-echo -e "EXEC_ROLE_ARN    = ${EXEC_ROLE_ARN}\nDOCKER_IMAGE_URL = ${DOCKER_IMAGE_URL}"
+echo -e "REGION           = ${REGION}\nEXEC_ROLE_ARN    = ${EXEC_ROLE_ARN}\nDOCKER_IMAGE_URL = ${DOCKER_IMAGE_URL}"
+         
 ```
 ### (13)-(b) ECSタスク定義作成
 ```shell
 #タスク定義作成用のコンフィグ作成
 TASK_DEF_JSON='{
-
     "family": "'"${TASK_FAMILY}"'",
     "requiresCompatibilities": [
             "EC2"
@@ -1231,7 +1232,15 @@ TASK_DEF_JSON='{
                 "timeout": 5
             }, 
             "essential": true, 
-            "volumesFrom": []
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/'"${TASK_FAMILY}"'",
+                    "awslogs-region": "'"${REGION}"'",
+                    "awslogs-stream-prefix": "container-httpd"
+                }
+            }
         }
     ], 
     "placementConstraints": [], 
