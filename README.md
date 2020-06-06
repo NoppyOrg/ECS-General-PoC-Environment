@@ -4,6 +4,18 @@ ECSを、VPC Endpointを利用したインターネット接続のない環境�
 # 作成環境
 <img src="./Documents/arch.png" whdth=500>
 
+* ECSクラスター名: <code>ecs-cluster-01</code>
+* Worker
+    * AutoScalingGroup名: <code>ecs-autoscaling-group</code>
+    * 起動テンプレート名: <code>ecs-worker-ec2-tamplate</code>
+* ALB
+    * ALB名: <code>ecs-front-balancer</code>
+    * Target名: <code>ecs-target</code>
+
+
+
+
+
 # 作成手順
 ## (1)事前設定
 ### (1)-(a) 作業環境の準備
@@ -595,7 +607,7 @@ Bastion_SG_ID=$(aws --profile ${PROFILE} --output text \
         --stack-name EcsWorker-VPC-SecurityGroup \
         --query 'Stacks[].Outputs[?OutputKey==`BastionSGId`].[OutputValue]')
 
-echo -e "Subnet1Id= $Subnet1Id\nSG_ID    = ${Bastion_SG_ID}"
+echo -e "PublicSubnet1Id= $PublicSubnet1Id\nSG_ID    = ${Bastion_SG_ID}"
 ```
 #### (ii) Basion用インスタンス作成
 ```shell
@@ -638,9 +650,99 @@ aws --profile ${PROFILE} \
         --iam-instance-profile "Name=EC2-BastionRole-Profile";
 ```
 
-## (7) ECR
+## (7) ALBの作成
+ECSのコンテナのフロント用のALBを作成します。下記内容で作成します。
+* ALB名: ecs-front-balancer
+* ２つのPublic SubnetでMulti-AZ構成で作成
+* ターゲット:
+    * ターゲット名: ecs-target
+    * protcol: HTTP
+    * ヘルスチェックで、portは指定しない(その場合デフォルトのトラフィックポート利用となる)
+* Listener
+    * Port 80でListen
+    * Protocol HTTP
 
-### (7)-(a) ECRレポジトリ作成
+## (7)-(a)データ設定
+```shell
+VpcId=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`VpcId`].[OutputValue]')
+
+PublicSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet1Id`].[OutputValue]')
+
+PublicSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet2Id`].[OutputValue]')
+
+ALB_SG_ID=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC-SecurityGroup \
+        --query 'Stacks[].Outputs[?OutputKey==`AlbSGId`].[OutputValue]')
+
+echo -e "VpcId           = ${VpcId}\nPublicSubnet1Id = $PublicSubnet1Id\nPublicSubnet2Id = $PublicSubnet2Id\nALB_SG_ID       = ${ALB_SG_ID}"
+
+```
+
+## (7)-(b) ALB作成
+```shell
+#ALBの作成
+aws --profile ${PROFILE} \
+    elbv2 create-load-balancer \
+        --name "ecs-front-balancer" \
+        --scheme "internet-facing" \
+        --subnets ${PublicSubnet1Id} ${PublicSubnet2Id}\
+        --security-groups ${ALB_SG_ID}
+#ALB ARNの取得
+ALB_ARN=$(aws --profile ${PROFILE} --output text \
+    elbv2 describe-load-balancers \
+        --names ecs-front-balancer \
+    --query 'LoadBalancers[].LoadBalancerArn' );
+echo "ALB_ARN = ${ALB_ARN}"
+
+```
+## (7)-(c) ターゲット作成
+```shell
+#ターゲット作成
+aws --profile ${PROFILE} \
+    elbv2 create-target-group \
+        --name "ecs-target" \
+        --protocol "HTTP" \
+        --port "80" \
+        --vpc-id "${VpcId}" \
+        --health-check-enabled \
+        --health-check-protocol "HTTP" \
+        --health-check-interval-seconds "15" \
+        --health-check-timeout-seconds "5" \
+        --healthy-threshold-count "5" \
+        --unhealthy-threshold-count "2" \
+        --matcher "HttpCode=200" ;
+
+#Target ARNの取得
+TARGET_ARN=$(aws --profile ${PROFILE} --output text \
+    elbv2 describe-target-groups \
+        --names ecs-target \
+    --query 'TargetGroups[].TargetGroupArn' );
+echo "TARGET_ARN = ${TARGET_ARN}"
+```
+
+## (7)-(d) リスナー作成
+```shell
+aws --profile ${PROFILE} \
+    elbv2 create-listener \
+        --load-balancer-arn ${ALB_ARN} \
+        --protocol "HTTP" \
+        --port "80" \
+        --default-actions "Type=forward,TargetGroupArn=${TARGET_ARN}"
+```
+
+## (8) ECR
+Dockerイメージを格納するECRのレポジトリを準備します。
+### (8)-(a) ECRレポジトリ作成
 ECRレポジトリを作成
 ```shell
 aws --profile ${PROFILE} \
@@ -649,17 +751,17 @@ aws --profile ${PROFILE} \
         --image-tag-mutability "MUTABLE" \
         --image-scanning-configuration "scanOnPush=true" ;
 ```
-### (7)-(b) ECRレポジトリリソースポリシー設定
+### (8)-(b) ECRレポジトリリソースポリシー設定
 別途アップデート
 
-### (7)-(c) VPC Endpoint ECRエンドポイントポリシー設定 
+### (8)-(c) VPC Endpoint ECRエンドポイントポリシー設定 
 別途アップデート
 
-## (8) VPC Endpoint アップデート S3
+## (9) VPC Endpoint アップデート S3
 別途アップデート
 
-## (9) Dockerイメージ(simple-httpserver)の準備
-### (9)-(a) Bastionのセットアップ
+## (10) Dockerイメージ(simple-httpserver)の準備
+### (10)-(a) Bastionのセットアップ
 #### (i) Bastionへログイン
 ```shell
 BastionIP=$( aws --profile ${PROFILE} --output text \
@@ -688,7 +790,7 @@ aws configure set output json
 #動作確認
 aws sts get-caller-identity
 ```
-### (9)-(b) Bastionでdockerイメージを作成しECR登録
+### (10)-(b) Bastionでdockerイメージを作成しECR登録
 Bastionインスタンス上で、簡単なhttpサーバーのコンテナイメージ(simple-httpd)を作成し、ECRに登録します。
 #### (i) dockerイメージのs作成
 ```shell
@@ -754,20 +856,35 @@ Bastionからログアウトし、作業端末に戻ります。
 exit
 ```
 
-(10) ECSクラスター作成
+## (11) Workerの準備
+ECSクラスターのAWS ECS Cluster Auto Scalingで利用するための、Worker用AutoScalingを用意します。
+設定は[こちら](https://aws.amazon.com/jp/blogs/news/aws-ecs-cluster-auto-scaling-is-now-generally-available/)を参考にしています。
 
-
-
-
-
-
-
-## (9) Worker
-### (9)-(a) Worker用起動テンプレート
+### (11)-(a) Autoscaling様のServiceLinkedRoleの作成
+AutoScalingのサービス用に規定のIAMロール(ServiceLinkedRole)を作成します。
 ```shell
+#サービスロールの有無チェック
+#このコマンドでロールが表示される場合は作成済みなのでスキップする
+aws --profile ${PROFILE} \
+    iam get-role --role-name AWSServiceRoleForAutoScaling
+
+#ECSサービスロールの作成
+aws --profile ${PROFILE} \
+    iam create-service-linked-role \
+        --aws-service-name autoscaling.amazonaws.com
+```
+### (11)-(b) Worker用起動テンプレート
+
+```shell
+#ECS クラスター名
+#クラスター名を変更する場合は修正して下さい。またECSクラスター作成時の名称も変更して下さい。
+ECS_CLUSTER_NAME="ecs-cluster-01" 
+
+#Worker用EC2設定
 KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
 INSTANCE_TYPE="m5.large"
 
+# ECSサービスで用意しているSSMのParameter StoreからAMIのIDを取得
 ECS_OPTIMIZED_AMZ2_AMI=$(aws --profile ${PROFILE} --output text \
     ssm  get-parameters \
         --names "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id" \
@@ -780,15 +897,20 @@ WORKER_SG=$(aws --profile ${PROFILE} --output text \
         --query 'Stacks[].Outputs[?OutputKey==`WorkerSGId`].[OutputValue]')
 
 #パラメータチェック
-echo -e "KEYNAME                = ${KEYNAME}\nINSTANCE_TYPE          = ${INSTANCE_TYPE}\nECS_OPTIMIZED_AMZ2_AMI = ${ECS_OPTIMIZED_AMZ2_AMI}\nWORKER_SG              = ${WORKER_SG}"
+echo -e "ECS_CLUSTER_NAME       = ${ECS_CLUSTER_NAME}\nKEYNAME                = ${KEYNAME}\nINSTANCE_TYPE          = ${INSTANCE_TYPE}\nECS_OPTIMIZED_AMZ2_AMI = ${ECS_OPTIMIZED_AMZ2_AMI}\nWORKER_SG              = ${WORKER_SG}"
 
 #テンプレートの作成
+USER_DATA_BASE64=$(echo -e \
+'#!/bin/bash
+echo ECS_CLUSTER='"${ECS_CLUSTER_NAME}"' >> /etc/ecs/ecs.config
+' | openssl enc -e -base64 | tr -d '\n')
+
 JSON='{
     "ImageId":"'${ECS_OPTIMIZED_AMZ2_AMI}'",
     "InstanceType":"'${INSTANCE_TYPE}'",
     "KeyName":"'${KEYNAME}'",
     "IamInstanceProfile":{
-        "Name": "AmazonEC2ContainerServiceforEC2Role-Profile}"
+        "Name": "AmazonEC2ContainerServiceforEC2Role-Profile"
     },
     "NetworkInterfaces":[
         {
@@ -803,11 +925,23 @@ JSON='{
     "Monitoring": {
         "Enabled": true
     },
+    "BlockDeviceMappings": [
+        {
+            "DeviceName": "/dev/xvdcz",
+            "Ebs": {
+                "VolumeSize": 22,
+                "VolumeType": "gp2",
+                "DeleteOnTermination": true,
+                "Encrypted": true
+                }
+        }
+    ],
     "MetadataOptions": {
         "HttpEndpoint": "enabled",
         "HttpTokens": "required",
         "HttpPutResponseHopLimit": 1
     },
+    "UserData": "'"${USER_DATA_BASE64}"'",
     "TagSpecifications": [
         {
             "ResourceType":"instance",
@@ -832,6 +966,66 @@ aws  --profile ${PROFILE} \
         --launch-template-name "ecs-worker-ec2-tamplate" \
         --launch-template-data "${JSON}"
 
+```
+
+### (11)-(c) Autoscaling グループの作成
+* 起動設定: 作成した起動テンプレートを指定
+* サイズ
+    * min-size = 0 (ECSからインスタンスを起動するため)
+    * desired-capacity = 0 (初期起動数。こちらも上記のminと同じ理由のため0設定)
+    * max-size = 4 (任意の設定)
+
+
+```shell
+#構成情報の取得
+PrivateSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet1Id`].[OutputValue]')
+
+PrivateSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet2Id`].[OutputValue]')
+
+AZ1=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-subnets \
+        --subnet-ids ${PrivateSubnet1Id} \
+    --query 'Subnets[].AvailabilityZone' );
+
+AZ2=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-subnets \
+        --subnet-ids ${PrivateSubnet2Id} \
+    --query 'Subnets[].AvailabilityZone' );
+
+TEMPLATE_LATEST_VER=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-launch-templates \
+        --launch-template-names "ecs-worker-ec2-tamplate" \
+    --query 'LaunchTemplates[].LatestVersionNumber')
+
+SERVICE_LINKED_ROLE_ARN=$(aws --profile ${PROFILE}  --output text \
+    iam get-role \
+        --role-name AWSServiceRoleForAutoScaling \
+    --query 'Role.Arn' );
+
+echo -e "PrivateSubnet1Id = ${PrivateSubnet1Id}\nAZ1              = ${AZ1}\nPrivateSubnet2Id = ${PrivateSubnet2Id}\nAZ2              = ${AZ2}\nTEMPLATE_LATEST_VER = ${TEMPLATE_LATEST_VER}\nSERVICE_LINKED_ROLE_ARN = ${SERVICE_LINKED_ROLE_ARN}"
+
+# Autoscalingグループの作成
+# subnetの指定は"--vpc-zone-identifier"、subnetのAZを"--availability-zones"に指定する
+aws  --profile ${PROFILE} \
+    autoscaling create-auto-scaling-group \
+        --auto-scaling-group-name "ecs-autoscaling-group" \
+        --launch-template "LaunchTemplateName=ecs-worker-ec2-tamplate,Version=${TEMPLATE_LATEST_VER}" \
+        --min-size "0" \
+        --max-size "4" \
+        --desired-capacity "0" \
+        --vpc-zone-identifier "${PrivateSubnet1Id},${PrivateSubnet2Id}" \
+        --availability-zones "${AZ1}" ${AZ2} \
+        --health-check-type "EC2" \
+        --health-check-grace-period "300" \
+        --termination-policies "DEFAULT" \
+        --new-instances-protected-from-scale-in \
+        --service-linked-role-arn "${SERVICE_LINKED_ROLE_ARN}"
 ```
 
 
