@@ -1193,7 +1193,7 @@ DOCKER_IMAGE_URL="${REPO_URL}:latest"
 
 echo -e "EXEC_ROLE_ARN    = ${EXEC_ROLE_ARN}\nDOCKER_IMAGE_URL = ${DOCKER_IMAGE_URL}"
 ```
-### (13)-ba) ECSタスク定義作成
+### (13)-(b) ECSタスク定義作成
 ```shell
 #タスク定義作成用のコンフィグ作成
 TASK_DEF_JSON='{
@@ -1209,6 +1209,15 @@ TASK_DEF_JSON='{
         {
             "name": "httpd",
             "image": "'"${DOCKER_IMAGE_URL}"'",
+            "cpu": 0, 
+            "memory": 256, 
+            "portMappings": [
+                {
+                    "hostPort": 0,
+                    "protocol": "tcp",
+                    "containerPort": 80
+                }
+            ],
             "environment": [],
             "mountPoints": [],
             "healthCheck": {
@@ -1221,9 +1230,6 @@ TASK_DEF_JSON='{
                 "startPeriod": 60,
                 "timeout": 5
             }, 
-            "cpu": 0, 
-            "portMappings": [], 
-            "memory": 256, 
             "essential": true, 
             "volumesFrom": []
         }
@@ -1237,3 +1243,5 @@ aws --profile ${PROFILE} \
     ecs register-task-definition \
         --cli-input-json "${TASK_DEF_JSON}" ;
 ```
+
+## (14)ECSサービスの作成
