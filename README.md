@@ -7,17 +7,14 @@ ECSを、VPC Endpointを利用したインターネット接続のない環境�
 * ECS
     * クラスター名: <code>ecs-cluster-01</code>
     * Provider名: <code>Provider-ecs-autoscaling-group</code>
+    * タスク定義名: <code>ecs-task-def</code>
+    * サービス名: <code>ecs-service</code>
 * Worker
     * AutoScalingGroup名: <code>ecs-autoscaling-group</code>
     * 起動テンプレート名: <code>ecs-worker-ec2-tamplate</code>
 * ALB
     * ALB名: <code>ecs-front-balancer</code>
     * Target名: <code>ecs-target</code>
-
-
-
-
-
 # 作成手順
 ## (1)事前設定
 ### (1)-(a) 作業環境の準備
@@ -143,7 +140,7 @@ aws --profile ${PROFILE} cloudformation create-stack \
 ```
 
 ## (5) IAMロール作成
-ここでは、ECS用に合計5つのIAMロールを作成します。またBasionからECRにイメージを登録するためBasion用のIAMインスタンスロールも作成します。
+ここでは、ECS用に複数のIAMロールを作成します。またBasionからECRにイメージを登録するためBasion用のIAMインスタンスロールも作成します。
 * ECS関連
 <table>
 <tr><th colspan=2>Class</th><th>IAM Role</th><th>principal</th><th>Policies summary</th><th>Remark</th></tr>
@@ -155,6 +152,7 @@ aws --profile ${PROFILE} cloudformation create-stack \
 <tr><td>Worker(EC2)</td><td>AmazonEC2ContainerServiceforEC2Role</td><td>ec2</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">Amazon ECS Container Instance IAM Role</a></td></tr>
 <tr><td>[Task]<br>ExecutionRole</td><td>ecsTaskExecutionRole</td><td>ecs-tasks</td><td>(AWS managed)<br>AmazonECSTaskExecutionRolePolicy</td><td><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_execution_IAM_role.html">Amazon ECS Task Execution IAM Role</a>(for pulling ecr and putting logs)</td></tr>
 <tr><td>[Task]<br>Task Role</td><td>今回は作成しない<br>(コンテナ内からAWS APIを実行する場合必要)</td><td>-</td><td>-</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html">IAM Roles for Tasks</a>(for pulling ecr and putting logs)</td></tr>
+<tr><td colspan=2>Application Autscaling<br>for ECS</td><td>AWSServiceRoleForApplicationAutoScaling_ECSService</td><td>ecs.application-autoscaling</td><td>(AWS managed)<br>AWSApplicationAutoscalingECSServicePolicy</td><td><a href="https://docs.aws.amazon.com/en_us/autoscaling/application/userguide/application-auto-scaling-service-linked-roles.html">Service-Linked Roles for Application Auto Scaling</a></td></tr>
 <tr><td colspan=2>CloudWatch Events</td><td>AmazonEC2ContainerServiceEventsRole</td><td>events</td><td>(AWS managed)<br>AmazonEC2ContainerServiceEventsRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/CWE_IAM_role.html">ECS CloudWatch Events IAM Role</a></td></tr>
 </table>
 
@@ -288,7 +286,10 @@ CustomerPolicyDocument='{
       ],
       "Condition": {
         "StringLike": {
-          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+            "iam:PassedToService": [
+                "ecs-tasks.amazonaws.com",
+                "ecs.amazonaws.com"
+            ]
         }
       }
     },
@@ -457,7 +458,20 @@ aws --profile ${PROFILE} \
         --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 ```
 
-### (5)-(e) CloudWatch イベント IAM ロール
+### (5)-(e) Application Autoscaling for ECS用サービスロール
+```shell
+#サービスロールの有無チェック
+#このコマンドでロールが表示される場合は作成済みなのでスキップする
+aws --profile ${PROFILE} \
+    iam get-role --role-name AWSServiceRoleForApplicationAutoScaling_ECSService
+
+#ECSサービスロールの作成
+aws --profile ${PROFILE} \
+    iam create-service-linked-role \
+        --aws-service-name ecs.application-autoscaling.amazonaws.com
+```
+
+### (5)-(f) CloudWatch イベント IAM ロール
 Amazon ECS のスケジュールされたタスクを CloudWatch イベント のルールとターゲットで使用するには、Amazon ECS タスクを実行するためのアクセス許可が CloudWatch イベント サービスに必要。
 #### (i) IAMロールの作成
 ```shell
@@ -509,7 +523,7 @@ aws --profile ${PROFILE} \
         --policy-document "${PolicyDocument}" ;
 ```
 
-### (5)-(f) Bastion Role
+### (5)-(g) Bastion Role
 ```shell
 #IAMロール作成
 POLICY='{
@@ -824,19 +838,27 @@ Bastionインスタンス上で、簡単なhttpサーバーのコンテナイメ
 mkdir httpd-container
 cd httpd-container
 
+#データ用フォルダを作成
+mkdir src
+
 #dockerコンテナの定義ファイルを作成
 cat > Dockerfile << EOL
 # setting base image
-FROM centos:centos7
+FROM php:7.0-apache
 
-# Author
-MAINTAINER cidermitaina
+COPY src/ /var/www/html/
+EOL
 
-# install Apache http server
-RUN ["yum",  "-y", "install", "httpd"]
-
-# start httpd
-CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
+#
+cat > src/index.php << EOL
+<html>
+  <head>
+    <title>PHP Sample</title>
+  </head>
+  <body>
+    <?php echo gethostname(); ?>
+  </body>
+</html>
 EOL
 
 #Docker build
@@ -844,10 +866,11 @@ docker build -t httpd-sample:ver01 .
 docker images
 
 #コンテナの動作確認
-docker run -d -p 8080:80 httpd
+docker run -d -p 8080:80 httpd-sample:ver01
+docker ps #コンテナが稼働していることを確認
 
 #接続確認
-#<html><body><h1>It works!</h1></body></html> が表示されたら成功！！
+# <title>PHP Sample</title>という文字が表示されたら成功！！
 curl http://localhost:8080
 
 ```
@@ -1086,7 +1109,7 @@ aws --profile ${PROFILE} \
         --auto-scaling-group-names "ecs-autoscaling-group"
 
 ```
-## (12) ECS設定
+## (12) ECSクラスター設定
 
 ### (12)-(a) ECS管理インスタンスへのログインと初期設定
 #### (i) ECS管理インスタンスへログイン
@@ -1111,7 +1134,15 @@ aws configure set output json
 #動作確認
 aws sts get-caller-identity
 ```
-### (12)-(b) Capacity Providerの作成
+### (12)-(b) ECSのARNフォーマットのロングネームオプトイン設定
+```shell
+aws --profile ${PROFILE} \
+    ecs put-account-setting \
+        --name serviceLongArnFormat \
+        --value enabled 
+```
+
+### (12)-(c) Capacity Providerの作成
 2020年6月時点では、作成したCapacity Providerを削除,変更する手段はなさそうです。[(参考:GithubのISSUE)](https://github.com/aws/containers-roadmap/issues/632)
 そのため作成し直す場合は、別名でAutoScalingとCapacity Providerを作成してください。
 ```shell
@@ -1154,7 +1185,7 @@ aws --profile ${PROFILE} \
 
 ```
 
-### (12)-(C) ECSクラスターの作成
+### (12)-(d) ECSクラスターの作成
 ```shell
 ECS_CLUSTER_NAME="ecs-cluster-01"
 CProvider_NAME="Provider-ecs-autoscaling-group"
@@ -1272,3 +1303,91 @@ aws --profile ${PROFILE} \
 ```
 
 ## (14)ECSサービスの作成
+
+### (14)-(a) 情報設定
+```shell
+#ECS定義 必要に応じて変更
+ECS_SERVICE_NAME="ecs-service"
+
+ECS_CLUSTER_NAME="ecs-cluster-01"
+ECS_TASK_DEF_NAME="ecs-task-def"
+ECS_CAPACITY_PROVIDER_NAME="Provider-ecs-autoscaling-group"
+
+#ALB定義 必要に応じて変更
+ALB_TARGET_NAME="ecs-target"
+
+#タスク定義設定
+ALB_CONTAINER_NAME="httpd"
+ALB_CONTAINER_PORT="80"
+
+#自動的に取得可能な助情報
+#タスク定義の最新バージョン
+ECS_TASK_DEF_REVISION=$(aws --profile ${PROFILE} --output text \
+    ecs describe-task-definition \
+        --task-definition "${ECS_TASK_DEF_NAME}" \
+    --query 'taskDefinition.revision' )
+
+#ELBのターゲットARN
+TARGET_ARN=$(aws --profile ${PROFILE} --output text \
+    elbv2 describe-target-groups \
+        --names "${ALB_TARGET_NAME}" \
+    --query 'TargetGroups[].TargetGroupArn' );
+
+ECS_SERVICE_ROLE_ARN=$(aws --profile ${PROFILE} --output text \
+    iam get-role \
+        --role-name "AWSServiceRoleForECS" \
+    --query 'Role.Arn' );
+
+
+echo -e "TARGET_ARN = ${TARGET_ARN}\nECS_SERVICE_ROLE_ARN = ${ECS_SERVICE_ROLE_ARN}"
+```
+
+### (14)-(b) ECSサービス作成
+```shell
+SERVICE_DEF_JSON='{
+    "cluster": "'"${ECS_CLUSTER_NAME}"'",
+    "serviceName": "'${ECS_SERVICE_NAME}'",
+    "taskDefinition": "'${ECS_TASK_DEF_NAME}:${ECS_TASK_DEF_REVISION}'",
+    "capacityProviderStrategy": [
+        {
+            "capacityProvider": "'"${ECS_CAPACITY_PROVIDER_NAME}"'",
+            "weight": 1,
+            "base": 0
+        }
+    ],
+    "schedulingStrategy": "REPLICA",
+    "desiredCount": 2,
+    "clientToken": "",
+    "deploymentConfiguration": {
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100
+    },
+    "deploymentController": {
+        "type": "CODE_DEPLOY"
+    },
+    "placementStrategy": [
+        {
+            "type": "spread",
+            "field": "attribute:ecs.availability-zone"
+        },
+        {
+            "type": "spread",
+            "field": "instanceId"
+        }
+    ],
+    "loadBalancers": [
+        {
+            "targetGroupArn": "'${TARGET_ARN}'",
+            "containerName": "'"${ALB_CONTAINER_NAME}"'",
+            "containerPort": '"${ALB_CONTAINER_PORT}"'
+        }
+    ],
+    "role": "'"${ECS_SERVICE_ROLE_ARN}"'",
+    "healthCheckGracePeriodSeconds": 0
+}'
+
+#サービス作成
+aws --profile ${PROFILE} \
+    ecs create-service \
+        --cli-input-json "${SERVICE_DEF_JSON}" ;
+```
