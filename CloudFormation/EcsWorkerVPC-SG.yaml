@@ -43,7 +43,7 @@ Resources:
   WorkerSGAllowIngressAlb:  # for bridge mode
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref TaskSG
+      GroupId: !Ref WorkerSG
       IpProtocol: tcp
       FromPort: 80
       ToPort: 80
