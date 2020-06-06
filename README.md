@@ -129,7 +129,8 @@ aws --profile ${PROFILE} cloudformation create-stack \
 ```
 
 ## (5) IAMロール作成
-ここでは、合計5つのIAMロールを作成します。
+ここでは、ECS用に合計5つのIAMロールを作成します。またBasionからECRにイメージを登録するためBasion用のIAMインスタンスロールも作成します。
+* ECS関連
 <table>
 <tr><th colspan=2>Class</th><th>IAM Role</th><th>principal</th><th>Policies summary</th><th>Remark</th></tr>
 <tr><td colspan=2>Admin User</td><td>EC2-EcsManagerRole</td><td>ec2</td><td><lu><li>ecs read/write</li><li>ec2(vpc)read</li><li>ec2(ec2)read/write</li><li>iam read</li></lu><li>ECS FullAccess</li><li>Describe other resource</li><li>IAM PassRole</li></td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html">ECS Developer Guide</a></td></tr>
@@ -140,6 +141,12 @@ aws --profile ${PROFILE} cloudformation create-stack \
 <tr><td>Worker(EC2)</td><td>AmazonEC2ContainerServiceforEC2Role</td><td>ec2</td><td>(AWS managed)<br>AmazonEC2ContainerServiceforEC2Role</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/instance_IAM_role.html">Amazon ECS Container Instance IAM Role</a></td></tr>
 <tr><td>Task</td><td>ecsTaskExecutionRole</td><td>ecs-tasks</td><td>(AWS managed)<br>AmazonECSTaskExecutionRolePolicy</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html">Amazon ECS Task Execution IAM Role</a></td></tr>
 <tr><td colspan=2>CloudWatch Events</td><td>AmazonEC2ContainerServiceEventsRole</td><td>events</td><td>(AWS managed)<br>AmazonEC2ContainerServiceEventsRole</td><td><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/CWE_IAM_role.html">ECS CloudWatch Events IAM Role</a></td></tr>
+</table>
+
+* ECR操作用
+<table>
+<tr><th>Class</th><th>IAM Role</th><th>principal</th><th>Policies summary</th><th>Remark</th></tr>
+<tr><td>Basion<br>ECR操作用</td><td>EC2-BastionRole</td><td>ec2</td><td>AmazonEC2ContainerRegistryPowerUser</td><td></td></tr>
 </table>
 
 
@@ -318,6 +325,15 @@ aws --profile ${PROFILE} \
         --role-name "EC2-EcsManagerRole" \
         --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/ecs/ECS-FullAccess
 
+#インスタンスプロファイルの作成
+aws --profile ${PROFILE} \
+    iam create-instance-profile \
+        --instance-profile-name "EC2-EcsManagerRole-Profile";
+
+aws --profile ${PROFILE} \
+    iam add-role-to-instance-profile \
+        --instance-profile-name "EC2-EcsManagerRole-Profile" \
+        --role-name "EC2-EcsManagerRole" ;
 ```
 
 ### (5)-(b) ECS Service Linkd Role
@@ -362,6 +378,16 @@ aws --profile ${PROFILE} \
     iam attach-role-policy \
         --role-name "AmazonEC2ContainerServiceforEC2Role" \
         --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+#インスタンスプロファイルの作成
+aws --profile ${PROFILE} \
+    iam create-instance-profile \
+        --instance-profile-name "AmazonEC2ContainerServiceforEC2Role-Profile";
+
+aws --profile ${PROFILE} \
+    iam add-role-to-instance-profile \
+        --instance-profile-name "AmazonEC2ContainerServiceforEC2Role-Profile" \
+        --role-name "AmazonEC2ContainerServiceforEC2Role" ;
 ```
 
 ### (5)-(d) タスク実行 IAM ロール
@@ -446,6 +472,46 @@ aws --profile ${PROFILE} \
         --policy-document "${PolicyDocument}" ;
 ```
 
+### (5)-(f) Bastion Role
+```shell
+#IAMロール作成
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "EC2-BastionRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
+
+
+# カスタマー管理ポリシーのアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "EC2-BastionRole" \
+        --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
+
+#インスタンスプロファイルの作成
+aws --profile ${PROFILE} \
+    iam create-instance-profile \
+        --instance-profile-name "EC2-BastionRole-Profile";
+
+aws --profile ${PROFILE} \
+    iam add-role-to-instance-profile \
+        --instance-profile-name "EC2-BastionRole-Profile" \
+        --role-name "EC2-BastionRole" ;
+```
+
 ## (6) ECS管理用/Bastionサーバ設置
 ### (6)-(a) 共通設定
 ```shell
@@ -513,11 +579,10 @@ aws --profile ${PROFILE} \
         --security-group-ids ${SG_ID} \
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" \
-        --user-data "${USER_DATA}" ;
+        --user-data "${USER_DATA}" \
+        --iam-instance-profile "Name=EC2-EcsManagerRole-Profile"
 ```
-
-
-### (6)-(c) ECSWorker Bastionインスタンス
+### (6)-(c) (ECSWorkerVPC)Bastionインスタンス
 #### (i) CloudFormationデータ取得
 ```shell
 PublicSubnet1Id=$(aws --profile ${PROFILE} --output text \
@@ -525,14 +590,14 @@ PublicSubnet1Id=$(aws --profile ${PROFILE} --output text \
         --stack-name EcsWorker-VPC \
         --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet1Id`].[OutputValue]')
 
-SG_ID=$(aws --profile ${PROFILE} --output text \
+Bastion_SG_ID=$(aws --profile ${PROFILE} --output text \
     cloudformation describe-stacks \
         --stack-name EcsWorker-VPC-SecurityGroup \
         --query 'Stacks[].Outputs[?OutputKey==`BastionSGId`].[OutputValue]')
 
-echo -e "Subnet1Id= $Subnet1Id\nSG_ID    = ${SG_ID}"
+echo -e "Subnet1Id= $Subnet1Id\nSG_ID    = ${Bastion_SG_ID}"
 ```
-#### (ii) ECS管理用インスタンス作成
+#### (ii) Basion用インスタンス作成
 ```shell
 #インスタンスタイプ設定
 INSTANCE_TYPE="t2.micro"
@@ -566,11 +631,218 @@ aws --profile ${PROFILE} \
         --instance-type ${INSTANCE_TYPE} \
         --key-name ${KEYNAME} \
         --subnet-id ${PublicSubnet1Id} \
-        --security-group-ids ${SG_ID} \
+        --security-group-ids ${Bastion_SG_ID} \
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" \
-        --user-data "${USER_DATA}" ;
+        --user-data "${USER_DATA}" \
+        --iam-instance-profile "Name=EC2-BastionRole-Profile";
 ```
+
+## (7) ECR
+
+### (7)-(a) ECRレポジトリ作成
+ECRレポジトリを作成
+```shell
+aws --profile ${PROFILE} \
+    ecr create-repository \
+        --repository-name "simple-httpserver" \
+        --image-tag-mutability "MUTABLE" \
+        --image-scanning-configuration "scanOnPush=true" ;
+```
+### (7)-(b) ECRレポジトリリソースポリシー設定
+別途アップデート
+
+### (7)-(c) VPC Endpoint ECRエンドポイントポリシー設定 
+別途アップデート
+
+## (8) VPC Endpoint アップデート S3
+別途アップデート
+
+## (9) Dockerイメージ(simple-httpserver)の準備
+### (9)-(a) Bastionのセットアップ
+#### (i) Bastionへログイン
+```shell
+BastionIP=$( aws --profile ${PROFILE} --output text \
+    ec2 describe-instances \
+        --filters \
+            "Name=instance-state-name,Values=running" \
+            "Name=tag:Name,Values=ECSWorker-Bastionr" \
+    --query 'Reservations[].Instances[].PublicIpAddress' );
+
+ssh-add
+ssh -A ec2-user@${BastionIP}
+```
+#### (ii) docker&aws cliセットアップ
+```shell
+# dockerセットアップ
+sudo yum install -y docker
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -a -G docker ec2-user
+
+# Setup AWS CLI
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/.$//')
+aws configure set region ${REGION}
+aws configure set output json
+
+#動作確認
+aws sts get-caller-identity
+```
+### (9)-(b) Bastionでdockerイメージを作成しECR登録
+Bastionインスタンス上で、簡単なhttpサーバーのコンテナイメージ(simple-httpd)を作成し、ECRに登録します。
+#### (i) dockerイメージのs作成
+```shell
+#Bastionサーバ上で実行します
+#コンテナイメージ用のディレクトリを作成し移動
+mkdir httpd-container
+cd httpd-container
+
+#dockerコンテナの定義ファイルを作成
+cat > Dockerfile << EOL
+# setting base image
+FROM centos:centos7
+
+# Author
+MAINTAINER cidermitaina
+
+# install Apache http server
+RUN ["yum",  "-y", "install", "httpd"]
+
+# start httpd
+CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
+EOL
+
+#Docker build
+docker build -t httpd-sample:ver01 .
+docker images
+
+#コンテナの動作確認
+docker run -d -p 8080:80 httpd
+
+#接続確認
+#<html><body><h1>It works!</h1></body></html> が表示されたら成功！！
+curl http://localhost:8080
+
+```
+#### (ii) ECRへの登録
+```shell
+# ECRレポジトリのURL取得
+REPO_URL=$( aws --output text \
+    ecr describe-repositories \
+        --repository-names simple-httpserver \
+    --query 'repositories[].repositoryUri' ) ;
+
+# ECR登録用のタグを作成
+docker tag httpd-sample:ver01 ${REPO_URL}:latest
+docker images #作成したtagが表示されていることを確認
+
+#ECRログイン
+#"Login Succeeded"と表示されることを確認
+aws ecr get-login-password | docker login --username AWS --password-stdin ${REPO_URL}
+
+#イメージのpush
+docker push ${REPO_URL}:latest
+
+#ECR上のレポジトリ確認
+aws ecr list-images --repository-name simple-httpserver
+
+```
+
+#### (iii) Bastion
+Bastionからログアウトし、作業端末に戻ります。
+```shell
+exit
+```
+
+(10) ECSクラスター作成
+
+
+
+
+
+
+
+## (9) Worker
+### (9)-(a) Worker用起動テンプレート
+```shell
+KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
+INSTANCE_TYPE="m5.large"
+
+ECS_OPTIMIZED_AMZ2_AMI=$(aws --profile ${PROFILE} --output text \
+    ssm  get-parameters \
+        --names "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id" \
+    --query 'Parameters[].Value' );
+
+#CloudFormationからの取得
+WORKER_SG=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name EcsWorker-VPC-SecurityGroup \
+        --query 'Stacks[].Outputs[?OutputKey==`WorkerSGId`].[OutputValue]')
+
+#パラメータチェック
+echo -e "KEYNAME                = ${KEYNAME}\nINSTANCE_TYPE          = ${INSTANCE_TYPE}\nECS_OPTIMIZED_AMZ2_AMI = ${ECS_OPTIMIZED_AMZ2_AMI}\nWORKER_SG              = ${WORKER_SG}"
+
+#テンプレートの作成
+JSON='{
+    "ImageId":"'${ECS_OPTIMIZED_AMZ2_AMI}'",
+    "InstanceType":"'${INSTANCE_TYPE}'",
+    "KeyName":"'${KEYNAME}'",
+    "IamInstanceProfile":{
+        "Name": "AmazonEC2ContainerServiceforEC2Role-Profile}"
+    },
+    "NetworkInterfaces":[
+        {
+            "DeviceIndex":0,
+            "AssociatePublicIpAddress":false,
+            "Groups":[
+                "'${WORKER_SG}'"
+            ],
+            "DeleteOnTermination":true
+        }
+    ],
+    "Monitoring": {
+        "Enabled": true
+    },
+    "MetadataOptions": {
+        "HttpEndpoint": "enabled",
+        "HttpTokens": "required",
+        "HttpPutResponseHopLimit": 1
+    },
+    "TagSpecifications": [
+        {
+            "ResourceType":"instance",
+            "Tags":[
+                {
+                    "Key":"Name",
+                    "Value":"ECS-worker"
+                }
+            ]
+        }
+    ]
+}'
+#新規作成する場合
+aws  --profile ${PROFILE} \
+    ec2 create-launch-template \
+        --launch-template-name "ecs-worker-ec2-tamplate" \
+        --launch-template-data "${JSON}"
+
+#アップデートする場合
+aws  --profile ${PROFILE} \
+    ec2 create-launch-template-version \
+        --launch-template-name "ecs-worker-ec2-tamplate" \
+        --launch-template-data "${JSON}"
+
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
