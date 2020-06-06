@@ -40,6 +40,14 @@ Resources:
       FromPort: 22
       ToPort: 22
       SourceSecurityGroupId: !GetAtt BastionSG.GroupId
+  WorkerSGAllowIngressAlb:  # for bridge mode
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TaskSG
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt AlbSG.GroupId
   #------------------ VPC Endpoint(ecs)
   VpceEcsSG:
     Type: AWS::EC2::SecurityGroup
@@ -140,7 +148,7 @@ Resources:
       FromPort: 80
       ToPort: 80
       CidrIp: 0.0.0.0/0
-  #------------------ TaskSG
+  #------------------ TaskSG( for awsvpc mode)
   TaskSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
