@@ -1426,10 +1426,20 @@ aws --profile ${PROFILE} \
         --min-capacity "${MIN_CAPACITY}" \
         --max-capacity "${MAX_CAPACITY}"
 
+#設定の確認
+aws --profile ${PROFILE} \
+    application-autoscaling describe-scalable-targets \
+        --service-namespace ecs
+
 ```
+### (iii) ポリシー追加
+```shell
+#ポリシー追加
+aws --profile ${PROFILE} \
+    application-autoscaling register-scalable-target \
+        --service-namespace "ecs" \
 
-[--suspended-state <value>]
-
+```
 
         "serviceNamespace": "ecs",
         "roleARN": "arn:aws:iam::813865360957:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
