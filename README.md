@@ -4,7 +4,9 @@ ECSを、VPC Endpointを利用したインターネット接続のない環境�
 # 作成環境
 <img src="./Documents/arch.png" whdth=500>
 
-* ECSクラスター名: <code>ecs-cluster-01</code>
+* ECS
+    * クラスター名: <code>ecs-cluster-01</code>
+    * Provider名: <code>Provider-ecs-autoscaling-group</code>
 * Worker
     * AutoScalingGroup名: <code>ecs-autoscaling-group</code>
     * 起動テンプレート名: <code>ecs-worker-ec2-tamplate</code>
@@ -1097,7 +1099,7 @@ aws configure set output json
 aws sts get-caller-identity
 ```
 ### (12)-(b) Capacity Providerの作成
-2020年6月時点では、作成したCapacity Providerを削除,変更する手段はなさそうです。
+2020年6月時点では、作成したCapacity Providerを削除,変更する手段はなさそうです。[(参考:GithubのISSUE)](https://github.com/aws/containers-roadmap/issues/632)
 そのため作成し直す場合は、別名でAutoScalingとCapacity Providerを作成してください。
 ```shell
 PROFILE=default
@@ -1139,16 +1141,32 @@ aws --profile ${PROFILE} \
 
 ```
 
+### (12)-(C) ECSクラスターの作成
+```shell
+ECS_CLUSTER_NAME="ecs-cluster-01"
+CProvider_NAME="Provider-ecs-autoscaling-group"
+
+#ECSクラスター作成
+CAPACITY_PROVIDER_STRATEGY_JSON='[
+  {
+    "capacityProvider": "'"${CProvider_NAME}"'",
+    "weight": 1
+  }
+]'
+
+aws --profile ${PROFILE} \
+    ecs create-cluster \
+        --cluster-name "${ECS_CLUSTER_NAME}" \
+        --capacity-providers "${CProvider_NAME}" \
+        --default-capacity-provider-strategy "${CAPACITY_PROVIDER_STRATEGY_JSON}"
 
 
+#ECSクラスターの確認
+aws --profile ${PROFILE} \
+    ecs describe-clusters \
+        --clusters "${ECS_CLUSTER_NAME}" 
 
-
-
-
-
-
-
-
+```
 
 
 
