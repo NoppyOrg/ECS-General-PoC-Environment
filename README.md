@@ -254,6 +254,16 @@ CustomerPolicyDocument='{
       ]
     },
     {
+      "Sid": "ForApplicationAutoscaling",
+      "Effect": "Allow",
+      "Action": [
+        "application-autoscaling:RegisterScalableTarget"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
       "Sid": "DescribeOtherServiceResources",
       "Effect": "Allow",
       "Action": [
@@ -1391,3 +1401,64 @@ aws --profile ${PROFILE} \
     ecs create-service \
         --cli-input-json "${SERVICE_DEF_JSON}" ;
 ```
+
+
+
+### (14)-(c) TaskのAutoscaling設定
+Application Autosclingにより、タスクのAutoScalingを実現します。
+#### (i)情報の設定
+```shell
+#タスクのAutoscaling用の設定
+ECS_SERVICE_ID="service/${ECS_CLUSTER_NAME}/${ECS_SERVICE_NAME}"
+MIN_CAPACITY=2
+MAX_CAPACITY=100
+
+```
+### (ii) Application Autoscaling for ECS定義
+```shell
+#タスクのAutoscaling作成
+aws --profile ${PROFILE} \
+    application-autoscaling register-scalable-target \
+        --service-namespace "ecs" \
+        --scalable-dimension "ecs:service:DesiredCount" \
+        --resource-id  "${ECS_SERVICE_ID}" \
+        --min-capacity "${MIN_CAPACITY}" \
+        --max-capacity "${MAX_CAPACITY}"
+
+```
+
+[--suspended-state <value>]
+
+
+        "serviceNamespace": "ecs",
+        "roleARN": "arn:aws:iam::813865360957:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
+
+        "resourceId": "service/ecs-cluster-01/ecs-service",
+        "scalableDimension": "ecs:service:DesiredCount",
+        "minCapacity": 2,
+        "maxCapacity": 100
+
+
+
+    "eventTime": "2020-06-06T20:02:58Z",
+    "eventSource": "autoscaling.amazonaws.com",
+    "eventName": "PutScalingPolicy",
+    "awsRegion": "ap-northeast-1",
+    "sourceIPAddress": "27.0.3.145",
+    "userAgent": "console.amazonaws.com",
+    "requestParameters": {
+        "policyType": "TargetTrackingScaling",
+        "scalableDimension": "ecs:service:DesiredCount",
+        "targetTrackingScalingPolicyConfiguration": {
+            "scaleOutCooldown": 300,
+            "scaleInCooldown": 300,
+            "targetValue": 10,
+            "predefinedMetricSpecification": {
+                "resourceLabel": "app/ecs-front-balancer/97023a6f00a79982/targetgroup/ecs-target/15c6867ce3ba600e",
+                "predefinedMetricType": "ALBRequestCountPerTarget"
+            }
+        },
+        "policyName": "Request",
+        "serviceNamespace": "ecs",
+        "resourceId": "service/ecs-cluster-01/ecs-service"
+    },
