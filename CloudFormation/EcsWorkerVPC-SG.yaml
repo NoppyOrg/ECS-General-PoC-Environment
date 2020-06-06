@@ -45,8 +45,8 @@ Resources:
     Properties:
       GroupId: !Ref WorkerSG
       IpProtocol: tcp
-      FromPort: 80
-      ToPort: 80
+      FromPort: 32768
+      ToPort: 60999
       SourceSecurityGroupId: !GetAtt AlbSG.GroupId
   #------------------ VPC Endpoint(ecs)
   VpceEcsSG:
