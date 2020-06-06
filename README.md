@@ -233,6 +233,16 @@ CustomerPolicyDocument='{
       ]
     },
     {
+      "Sid": "ForSettingEcsProvider",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:CreateOrUpdateTags"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
       "Sid": "DescribeOtherServiceResources",
       "Effect": "Allow",
       "Action": [
@@ -1012,23 +1022,122 @@ echo -e "PrivateSubnet1Id = ${PrivateSubnet1Id}\nAZ1              = ${AZ1}\nPriv
 
 # Autoscalingグループの作成
 # subnetの指定は"--vpc-zone-identifier"、subnetのAZを"--availability-zones"に指定する
-aws  --profile ${PROFILE} \
+CONFIG_JSON='{
+    "AutoScalingGroupName": "ecs-autoscaling-group",
+    "MixedInstancesPolicy": {
+        "LaunchTemplate": {
+            "LaunchTemplateSpecification": {
+                "LaunchTemplateName": "ecs-worker-ec2-tamplate",
+                "Version": "'"${TEMPLATE_LATEST_VER}"'"
+            },
+            "Overrides": [
+                {
+                    "InstanceType": "c4.large"
+                },
+                {
+                    "InstanceType": "c5.large"
+                }
+            ]
+        },
+        "InstancesDistribution": {
+            "OnDemandPercentageAboveBaseCapacity": 0,
+            "SpotAllocationStrategy": "lowest-price",
+            "SpotInstancePools": 2
+        }
+    },
+    "MinSize": 0,
+    "MaxSize": 4,
+    "DesiredCapacity": 0,
+    "VPCZoneIdentifier": "'"${PrivateSubnet1Id},${PrivateSubnet2Id}"'",
+    "AvailabilityZones": [
+        "'"${AZ1}"'",
+        "'"${AZ2}"'"
+    ],
+    "HealthCheckType": "EC2",
+    "HealthCheckGracePeriod": 300,
+    "TerminationPolicies": [
+        "DEFAULT"
+    ],
+    "NewInstancesProtectedFromScaleIn": true,
+    "ServiceLinkedRoleARN": "'"${SERVICE_LINKED_ROLE_ARN}"'"
+}'
+aws --profile ${PROFILE} \
     autoscaling create-auto-scaling-group \
-        --auto-scaling-group-name "ecs-autoscaling-group" \
-        --launch-template "LaunchTemplateName=ecs-worker-ec2-tamplate,Version=${TEMPLATE_LATEST_VER}" \
-        --min-size "0" \
-        --max-size "4" \
-        --desired-capacity "0" \
-        --vpc-zone-identifier "${PrivateSubnet1Id},${PrivateSubnet2Id}" \
-        --availability-zones "${AZ1}" ${AZ2} \
-        --health-check-type "EC2" \
-        --health-check-grace-period "300" \
-        --termination-policies "DEFAULT" \
-        --new-instances-protected-from-scale-in \
-        --service-linked-role-arn "${SERVICE_LINKED_ROLE_ARN}"
+        --cli-input-json "${CONFIG_JSON}"
+
+#作成したAutoscalingグループの確認
+aws --profile ${PROFILE} \
+    autoscaling describe-auto-scaling-groups \
+        --auto-scaling-group-names "ecs-autoscaling-group"
+
 ```
+## (12) ECS設定
 
+### (12)-(a) ECS管理インスタンスへのログインと初期設定
+#### (i) ECS管理インスタンスへログイン
+```shell
+EcsMgrIP=$( aws --profile ${PROFILE} --output text \
+    ec2 describe-instances \
+        --filters \
+            "Name=instance-state-name,Values=running" \
+            "Name=tag:Name,Values=ECS-Manager" \
+    --query 'Reservations[].Instances[].PublicIpAddress' );
 
+ssh-add
+ssh -A ec2-user@${EcsMgrIP}
+```
+#### (ii) cliセットアップ
+```shell
+# Setup AWS CLI
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/.$//')
+aws configure set region ${REGION}
+aws configure set output json
+
+#動作確認
+aws sts get-caller-identity
+```
+### (12)-(b) Capacity Providerの作成
+2020年6月時点では、作成したCapacity Providerを削除,変更する手段はなさそうです。
+そのため作成し直す場合は、別名でAutoScalingとCapacity Providerを作成してください。
+```shell
+PROFILE=default
+
+#設定
+ASG_NAME="ecs-autoscaling-group" #Autoscalingグループ名
+CProvider_NAME="Provider-ecs-autoscaling-group"
+
+#情報取得
+ASG_ARN=$(aws --profile ${PROFILE} --output text \
+    autoscaling describe-auto-scaling-groups \
+        --auto-scaling-group-names "${ASG_NAME}" \
+    --query 'AutoScalingGroups[].AutoScalingGroupARN') ;
+
+echo -e "ASG_ARN = ${ASG_ARN}"
+
+#Autoscaling用のProvider設定JSON
+ProviderForASG_JSON='{
+    "autoScalingGroupArn": "'"${ASG_ARN}"'",
+    "managedScaling": {
+        "status": "ENABLED",
+        "targetCapacity": 100,
+        "minimumScalingStepSize": 2,
+        "maximumScalingStepSize": 10
+    },
+    "managedTerminationProtection": "ENABLED"
+}'
+
+#ECS Providerの作成
+aws --profile ${PROFILE} \
+    ecs create-capacity-provider \
+        --name "${CProvider_NAME}" \
+        --auto-scaling-group-provider "${ProviderForASG_JSON}"
+
+#作成したECS Providerの確認
+aws --profile ${PROFILE} \
+    ecs describe-capacity-providers \
+        --capacity-providers "${CProvider_NAME}"
+
+```
 
 
 
