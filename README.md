@@ -257,7 +257,8 @@ CustomerPolicyDocument='{
       "Sid": "ForApplicationAutoscaling",
       "Effect": "Allow",
       "Action": [
-        "application-autoscaling:RegisterScalableTarget"
+        "application-autoscaling:RegisterScalableTarget",
+        "application-autoscaling:PutScalingPolicy"
       ],
       "Resource": [
         "*"
