@@ -840,7 +840,7 @@ aws configure set output json
 #動作確認
 aws sts get-caller-identity
 ```
-### (10)-(b) Bastionでdockerイメージを作成しECR登録
+### (10)-(b) Bastionでdockerイメージを作成しECR登録
 Bastionインスタンス上で、簡単なhttpサーバーのコンテナイメージ(simple-httpd)を作成し、ECRに登録します。
 #### (i) dockerイメージのs作成
 ```shell
@@ -1107,7 +1107,7 @@ CONFIG_JSON='{
     "TerminationPolicies": [
         "DEFAULT"
     ],
-    "NewInstancesProtectedFromScaleIn": true,
+    "NewInstancesProtectedFromScaleIn": false,
     "ServiceLinkedRoleARN": "'"${SERVICE_LINKED_ROLE_ARN}"'"
 }'
 aws --profile ${PROFILE} \
