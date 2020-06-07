@@ -1411,8 +1411,34 @@ Application Autosclingにより、タスクのAutoScalingを実現します。
 ```shell
 #タスクのAutoscaling用の設定
 ECS_SERVICE_ID="service/${ECS_CLUSTER_NAME}/${ECS_SERVICE_NAME}"
-MIN_CAPACITY=2
-MAX_CAPACITY=100
+MIN_CAPACITY="2"
+MAX_CAPACITY="100"
+
+#Plicy用設定
+ALB_NAME="ecs-front-balancer"
+ALB_TARGET_NAME="ecs-target"
+
+SCALING_POLICY_METRIC_TYPE="ALBRequestCountPerTarget"
+SCALING_POLICY_SCALEOUT_COOLDOWN="15"
+SCALING_POLICY_SCALEIN_COOLDOWN="15"
+SCALING_POLICY_TARGET="10"
+
+#自動取得
+ALB_ALB_ID=$(aws --profile ${PROFILE} --output text \
+    elbv2 describe-load-balancers \
+        --name "${ALB_NAME}" \
+    --query 'LoadBalancers[].LoadBalancerArn' \
+    | sed -r 's/.*\/([0-9a-z]+)$/\1/'
+    )
+TARGET_ID=$(aws --profile ${PROFILE} --output text \
+    elbv2 describe-target-groups \
+        --name "${ALB_TARGET_NAME}" \
+    --query 'TargetGroups[].TargetGroupArn' \
+    | sed -r 's/.*\/([0-9a-z]+)$/\1/'
+    )
+RESOURCE_ID="app/${ALB_NAME}/${ALB_ALB_ID}/targetgroup/${ALB_TARGET_NAME}/${TARGET_ID}"
+#確認
+echo -e "ECS_SERVICE_ID = ${ECS_SERVICE_ID=}\nALB_ALB_ID = ${ALB_ALB_ID}\nTARGET_ID  = ${TARGET_ID}\nRESOURCE_ID= ${RESOURCE_ID}"
 
 ```
 ### (ii) Application Autoscaling for ECS定義
@@ -1434,42 +1460,31 @@ aws --profile ${PROFILE} \
 ```
 ### (iii) ポリシー追加
 ```shell
+#ポリシー追加(ターゲットコンフィグ)
+TARGET_TRACKING_SCALING_POLICY_JSON='{
+    "ScaleOutCooldown": '"${SCALING_POLICY_SCALEOUT_COOLDOWN}"',
+    "ScaleInCooldown": '"${SCALING_POLICY_SCALEIN_COOLDOWN}"',
+    "TargetValue": '"${SCALING_POLICY_TARGET}"',
+    "DisableScaleIn": false,
+    "PredefinedMetricSpecification": {
+        "PredefinedMetricType": "'"${SCALING_POLICY_METRIC_TYPE}"'",
+        "ResourceLabel": "'"${RESOURCE_ID}"'"
+    }
+}'
+
 #ポリシー追加
 aws --profile ${PROFILE} \
-    application-autoscaling register-scalable-target \
+    application-autoscaling put-scaling-policy \
+        --policy-name "Request" \
+        --policy-type "TargetTrackingScaling" \
         --service-namespace "ecs" \
+        --scalable-dimension "ecs:service:DesiredCount" \
+        --resource-id "${ECS_SERVICE_ID}" \
+        --target-tracking-scaling-policy-configuration "${TARGET_TRACKING_SCALING_POLICY_JSON}"
+
+#ポリシー確認
+aws --profile ${PROFILE} \
+    application-autoscaling describe-scaling-policies \
+        --service-namespace "ecs"
 
 ```
-
-        "serviceNamespace": "ecs",
-        "roleARN": "arn:aws:iam::813865360957:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
-
-        "resourceId": "service/ecs-cluster-01/ecs-service",
-        "scalableDimension": "ecs:service:DesiredCount",
-        "minCapacity": 2,
-        "maxCapacity": 100
-
-
-
-    "eventTime": "2020-06-06T20:02:58Z",
-    "eventSource": "autoscaling.amazonaws.com",
-    "eventName": "PutScalingPolicy",
-    "awsRegion": "ap-northeast-1",
-    "sourceIPAddress": "27.0.3.145",
-    "userAgent": "console.amazonaws.com",
-    "requestParameters": {
-        "policyType": "TargetTrackingScaling",
-        "scalableDimension": "ecs:service:DesiredCount",
-        "targetTrackingScalingPolicyConfiguration": {
-            "scaleOutCooldown": 300,
-            "scaleInCooldown": 300,
-            "targetValue": 10,
-            "predefinedMetricSpecification": {
-                "resourceLabel": "app/ecs-front-balancer/97023a6f00a79982/targetgroup/ecs-target/15c6867ce3ba600e",
-                "predefinedMetricType": "ALBRequestCountPerTarget"
-            }
-        },
-        "policyName": "Request",
-        "serviceNamespace": "ecs",
-        "resourceId": "service/ecs-cluster-01/ecs-service"
-    },
