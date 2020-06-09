@@ -1156,6 +1156,12 @@ aws --profile ${PROFILE} \
 ### (12)-(c) Capacity Providerの作成
 2020年6月時点では、作成したCapacity Providerを削除,変更する手段はなさそうです。[(参考:GithubのISSUE)](https://github.com/aws/containers-roadmap/issues/632)
 そのため作成し直す場合は、別名でAutoScalingとCapacity Providerを作成してください。
+* Provider設定
+    * Managed Scaling
+        * 最小ステップサイズ: 1  (マネコンから作成した時の設定値を採用)
+        * 最大ステップサイズ: 10000  (マネコンから作成した時の設定値を採用)
+        * ターゲット: 100  (実運用では、検討が必要)
+    * managedTerminationProtection : 有効化 (有効かした場合)
 ```shell
 PROFILE=default
 
@@ -1177,8 +1183,8 @@ ProviderForASG_JSON='{
     "managedScaling": {
         "status": "ENABLED",
         "targetCapacity": 100,
-        "minimumScalingStepSize": 2,
-        "maximumScalingStepSize": 10
+        "minimumScalingStepSize": 1,
+        "maximumScalingStepSize": 10000
     },
     "managedTerminationProtection": "ENABLED"
 }'
