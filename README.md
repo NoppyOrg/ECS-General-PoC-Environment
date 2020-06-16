@@ -1391,7 +1391,7 @@ SERVICE_DEF_JSON='{
         },
         {
             "type": "binpack",
-            "field": "instanceId"
+            "field": "memory"
         }
     ],
     "loadBalancers": [
