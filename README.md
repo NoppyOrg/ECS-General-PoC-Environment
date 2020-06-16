@@ -1147,6 +1147,8 @@ aws sts get-caller-identity
 ```
 ### (12)-(b) ECSのARNフォーマットのロングネームオプトイン設定
 ```shell
+PROFILE=default
+
 aws --profile ${PROFILE} \
     ecs put-account-setting \
         --name serviceLongArnFormat \
@@ -1388,7 +1390,7 @@ SERVICE_DEF_JSON='{
             "field": "attribute:ecs.availability-zone"
         },
         {
-            "type": "spread",
+            "type": "binpack",
             "field": "instanceId"
         }
     ],
