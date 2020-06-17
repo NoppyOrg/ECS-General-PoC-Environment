@@ -842,7 +842,7 @@ aws sts get-caller-identity
 ```
 ### (10)-(b) Bastionでdockerイメージを作成しECR登録
 Bastionインスタンス上で、簡単なhttpサーバーのコンテナイメージ(simple-httpd)を作成し、ECRに登録します。
-#### (i) dockerイメージのs作成
+#### (i) dockerイメージの作成
 ```shell
 #Bastionサーバ上で実行します
 #コンテナイメージ用のディレクトリを作成し移動
