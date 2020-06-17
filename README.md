@@ -811,7 +811,7 @@ aws --profile ${PROFILE} \
 別途アップデート
 
 ## (10) Dockerイメージ(simple-httpserver)の準備
-### (10)-(a) Bastionのセットアップ
+### (10)-(a) Bastionのセットアップ
 #### (i) Bastionへログイン
 ```shell
 BastionIP=$( aws --profile ${PROFILE} --output text \
