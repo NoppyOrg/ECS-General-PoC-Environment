@@ -1230,6 +1230,33 @@ aws --profile ${PROFILE} \
         --clusters "${ECS_CLUSTER_NAME}" 
 
 ```
+### (12)-(e) Container Insights on Amazon ECSの有効化
+Container Insightsを利用することで、コンテナのメトリクスとログを収集、集計、要約することができます。
+[ご参考](https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/deploy-container-insights-ECS-cluster.html)
+#### (i) アカウントレベルのアクセス許可設定
+```shell
+#設定の確認
+#以下を設定してcontainerInsightsの設定が表示されない場合は、設定を実施する
+aws --profile ${PROFILE} \
+    ecs list-account-settings
+
+#設定(上記で設定が表示されない場合)
+aws --profile ${PROFILE} \
+    ecs put-account-setting \
+        --name "containerInsights" \
+        --value "enabled"
+
+#設定の確認
+aws --profile ${PROFILE} \
+    ecs list-account-settings
+```
+#### (ii)クラスターに対するContainer Insights設定
+```shell
+aws --profile ${PROFILE} \
+    ecs update-cluster-settings \
+        --cluster "${ECS_CLUSTER_NAME}" \
+        --settings "name=containerInsights,value=enabled"
+```
 ## (13)ECSタスク定義の作成
 ECSクラスターで稼働させるタスク(１つ以上のコンテナを定義した、ECSのコンテナ起動)の定義である、タスク定義を作成します。
 ### (13)-(a) 情報設定
