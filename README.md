@@ -672,7 +672,7 @@ TAGJSON='
         "Tags": [
             {
                 "Key": "Name",
-                "Value": "ECSWorker-Bastionr"
+                "Value": "ECSWorker-Bastion"
             }
         ]
     }
@@ -684,7 +684,7 @@ USER_DATA='
                 
 yum -y update
 yum -y install bind bind-utils
-hostnamectl set-hostname ECSWorker-Bastionr
+hostnamectl set-hostname ECSWorker-Bastion
 '
 # サーバの起動
 aws --profile ${PROFILE} \
@@ -818,7 +818,7 @@ BastionIP=$( aws --profile ${PROFILE} --output text \
     ec2 describe-instances \
         --filters \
             "Name=instance-state-name,Values=running" \
-            "Name=tag:Name,Values=ECSWorker-Bastionr" \
+            "Name=tag:Name,Values=ECSWorker-Bastion" \
     --query 'Reservations[].Instances[].PublicIpAddress' );
 
 ssh-add
