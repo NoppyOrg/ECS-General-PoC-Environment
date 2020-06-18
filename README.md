@@ -1,9 +1,18 @@
-# Amazon ECSの高セキュリティ環境検証
-ECSを、VPC Endpointを利用したインターネット接続のない環境で利用する検証。
+# Amazon ECSの検証環境構築手順
+ECSを、VPC Endpointを利用したVPC閉塞環境で構築する手順です。
 
 # 作成環境
-<img src="./Documents/arch.png" whdth=500>
+## (1) 構成概要図
+### (1)-(a) 全体構成
+<img src="./Document/figure1.png" whdth=500>
 
+### (1)-(b) セキュリティグループ構成
+<img src="./Document/figure2.png" whdth=500>
+
+### (1)-(c) IAMロール構成
+<img src="./Document/figure3.png" whdth=500>
+
+## (2)構成名称一覧
 * ECS
     * クラスター名: <code>ecs-cluster-01</code>
     * Provider名: <code>Provider-ecs-autoscaling-group</code>
