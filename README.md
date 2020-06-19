@@ -637,7 +637,6 @@ USER_DATA='
 #!/bin/bash -xe
                 
 yum -y update
-yum -y install bind bind-utils
 hostnamectl set-hostname ECS-Manager
 '
 # サーバの起動
@@ -692,7 +691,6 @@ USER_DATA='
 #!/bin/bash -xe
                 
 yum -y update
-yum -y install bind bind-utils
 hostnamectl set-hostname ECSWorker-Bastion
 '
 # サーバの起動
