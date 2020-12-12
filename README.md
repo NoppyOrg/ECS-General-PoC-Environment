@@ -914,7 +914,7 @@ exit
 ECSクラスターのAWS ECS Cluster Auto Scalingで利用するための、Worker用AutoScalingを用意します。
 設定は[こちら](https://aws.amazon.com/jp/blogs/news/aws-ecs-cluster-auto-scaling-is-now-generally-available/)を参考にしています。
 
-### (11)-(a) Autoscaling様のServiceLinkedRoleの作成
+### (11)-(a) Autoscaling用ServiceLinkedRoleの作成
 AutoScalingのサービス用に規定のIAMロール(ServiceLinkedRole)を作成します。
 ```shell
 #サービスロールの有無チェック
