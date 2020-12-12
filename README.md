@@ -1381,7 +1381,7 @@ ECS_SERVICE_ROLE_ARN=$(aws --profile ${PROFILE} --output text \
     --query 'Role.Arn' );
 
 
-echo -e "TARGET_ARN = ${TARGET_ARN}\nECS_SERVICE_ROLE_ARN = ${ECS_SERVICE_ROLE_ARN}"
+echo -e "ECS_TASK_DEF_REVISION = ${ECS_TASK_DEF_REVISION}\nTARGET_ARN = ${TARGET_ARN}\nECS_SERVICE_ROLE_ARN = ${ECS_SERVICE_ROLE_ARN}"
 ```
 
 ### (14)-(b) ECSサービス作成
