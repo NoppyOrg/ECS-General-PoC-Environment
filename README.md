@@ -34,8 +34,8 @@ ECSを、VPC Endpointを利用したVPC閉塞環境で構築する手順です�
 
 ### (1)-(b) gitのclone
 ```shell
-git clone https://github.com/Noppy/ECS-Security-PoC.git
-cd ECS-Security-PoC
+git clone https://github.com/Noppy/ECS-General-PoC-Environment.git
+cd ECS-General-PoC-Environment
 ```
 
 ### (1)-(c) CLI実行用の事前準備
@@ -69,10 +69,6 @@ CFN_STACK_PARAMETERS='
   {
     "ParameterKey": "VpcName",
     "ParameterValue": "ManagementVPC"
-  },
-  {
-    "ParameterKey": "VpcInternalDnsName",
-    "ParameterValue": "ecs-mgr.local."
   }
 ]'
 
@@ -106,10 +102,6 @@ CFN_STACK_PARAMETERS='
   {
     "ParameterKey": "VpcName",
     "ParameterValue": "EcsWorkerVPC"
-  },
-  {
-    "ParameterKey": "VpcInternalDnsName",
-    "ParameterValue": "ecs-worker.local."
   }
 ]'
 
