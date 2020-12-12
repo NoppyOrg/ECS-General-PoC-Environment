@@ -1013,13 +1013,14 @@ aws  --profile ${PROFILE} \
     ec2 create-launch-template \
         --launch-template-name "ecs-worker-ec2-tamplate" \
         --launch-template-data "${JSON}"
-
+```
+ちなみに既存のテンプレートをアップデートする場合は以下のコマンドになります。
+```shell
 #アップデートする場合
 aws  --profile ${PROFILE} \
     ec2 create-launch-template-version \
         --launch-template-name "ecs-worker-ec2-tamplate" \
         --launch-template-data "${JSON}"
-
 ```
 
 ### (11)-(c) Autoscaling グループの作成
@@ -1102,7 +1103,7 @@ CONFIG_JSON='{
     "TerminationPolicies": [
         "DEFAULT"
     ],
-    "NewInstancesProtectedFromScaleIn": false,
+    "NewInstancesProtectedFromScaleIn": true,
     "ServiceLinkedRoleARN": "'"${SERVICE_LINKED_ROLE_ARN}"'"
 }'
 aws --profile ${PROFILE} \
