@@ -126,11 +126,6 @@ aws --profile ${PROFILE} cloudformation create-stack \
 aws --profile ${PROFILE} cloudformation create-stack \
     --stack-name EcsWorker-VPC-SecurityGroup \
     --template-body "file://./CloudFormation/EcsWorkerVPC-SG.yaml" ;
-
-#スタック更新時
-aws --profile ${PROFILE} cloudformation update-stack \
-    --stack-name EcsWorker-VPC-SecurityGroup \
-    --template-body "file://./CloudFormation/EcsWorkerVPC-SG.yaml" ;
 ```
 ## (4) VPC Endpoint設定
 ECSWorker-VPCに、ECS、ECR(API, Docker)、Logs、S3のVPC Endpointを作成します。Endpoint policyはここでは設定せず、リソース作成後にCLIで設定します。
@@ -170,6 +165,7 @@ aws --profile ${PROFILE} cloudformation create-stack \
 #事前設定
 ACCOUNT_ID=$(aws --profile ${PROFILE} --output text \
     sts get-caller-identity --query 'Account')
+echo "ACCOUNT_ID=${ACCOUNT_ID}"
 
 
 # カスタマー管理ポリシー - 自分のアクセス許可の表示を許可
