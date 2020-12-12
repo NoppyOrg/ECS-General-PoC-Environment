@@ -1375,13 +1375,7 @@ TARGET_ARN=$(aws --profile ${PROFILE} --output text \
         --names "${ALB_TARGET_NAME}" \
     --query 'TargetGroups[].TargetGroupArn' );
 
-ECS_SERVICE_ROLE_ARN=$(aws --profile ${PROFILE} --output text \
-    iam get-role \
-        --role-name "AWSServiceRoleForECS" \
-    --query 'Role.Arn' );
-
-
-echo -e "ECS_TASK_DEF_REVISION = ${ECS_TASK_DEF_REVISION}\nTARGET_ARN = ${TARGET_ARN}\nECS_SERVICE_ROLE_ARN = ${ECS_SERVICE_ROLE_ARN}"
+echo -e "ECS_TASK_DEF_REVISION = ${ECS_TASK_DEF_REVISION}\nTARGET_ARN = ${TARGET_ARN}"
 ```
 
 ### (14)-(b) ECSサービス作成
@@ -1424,7 +1418,6 @@ SERVICE_DEF_JSON='{
             "containerPort": '"${ALB_CONTAINER_PORT}"'
         }
     ],
-    "role": "'"${ECS_SERVICE_ROLE_ARN}"'",
     "healthCheckGracePeriodSeconds": 0
 }'
 
@@ -1433,8 +1426,6 @@ aws --profile ${PROFILE} \
     ecs create-service \
         --cli-input-json "${SERVICE_DEF_JSON}" ;
 ```
-
-
 
 ### (14)-(c) TaskのAutoscaling設定
 Application Autosclingにより、タスクのAutoScalingを実現します。
