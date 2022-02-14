@@ -1141,14 +1141,15 @@ aws configure set output json
 #動作確認
 aws sts get-caller-identity
 ```
-### (12)-(b) ECSのARNフォーマットのロングネームオプトイン設定
+### (12)-(b) AWSアカウントレベルのECS設定
+#### (i) AWSVPC Trunkingの有効化
+awsvpc ネットワークモードで一つのインスタンスにアタッチ可能なENI個数は通常インスタンスサイズに依存します。例えば`c5.largeインスタンス`にアタッチ可能なENI数は最大3個です。
+AWSVPC Trunkingをオプトインすることで、インスタンスにアタッチ可能なENI数上限を引き上げることができます。
 ```shell
-PROFILE=default
-
 aws --profile ${PROFILE} \
     ecs put-account-setting \
-        --name serviceLongArnFormat \
-        --value enabled 
+        --name "awsvpcTrunking" \
+        --value "enabled"
 ```
 
 ### (12)-(c) Capacity Providerの作成
